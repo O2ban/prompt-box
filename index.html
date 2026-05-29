@@ -359,6 +359,13 @@ input, textarea { font-family: inherit; font-size: 15px; }
         <button class="btn-secondary" style="width:100%;margin-top:8px" id="btn-add-provider">+ 添加提供商</button>
       </div>
       <div class="setting-section">
+        <div class="setting-label">应用</div>
+        <div class="setting-item" id="btn-reload" style="cursor:pointer">
+          <span class="setting-item-label">刷新应用（获取最新版本）</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </div>
+      </div>
+      <div class="setting-section">
         <div class="setting-label">数据管理</div>
         <div class="setting-item" id="btn-export" style="cursor:pointer">
           <span class="setting-item-label">导出全部数据</span>
@@ -1117,6 +1124,8 @@ async function saveSettings() {
 }
 
 // ===== EXPORT / IMPORT =====
+document.getElementById('btn-reload').onclick = () => location.reload(true);
+
 document.getElementById('btn-export').onclick = async () => {
   const data = { version: 1, exportedAt: new Date().toISOString(), files, conversations, settings };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
