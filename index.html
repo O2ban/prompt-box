@@ -200,7 +200,7 @@ input, textarea { font-family: inherit; font-size: 15px; }
 .chat-input {
   flex: 1; border: 1px solid var(--border); border-radius: 10px;
   padding: 9px 12px; font-size: 14px; resize: none; outline: none;
-  max-height: 120px; line-height: 1.5; background: var(--bg);
+  max-height: 120px; min-height: 38px; line-height: 1.5; background: var(--bg);
 }
 .send-btn {
   width: 38px; height: 38px; border-radius: 10px; background: var(--primary);
@@ -1271,11 +1271,11 @@ document.getElementById('btn-save-project').onclick = async () => {
     const p = { id: uuid(), name, githubPAT, githubRepo, githubDir, githubBranch, createdAt: ts(), updatedAt: ts() };
     projects.push(p);
     await dbPut('projects', p);
-    enterProject(p.id);
+    if (!currentProjectId) enterProject(p.id);
   }
   document.getElementById('overlay-project').classList.remove('active');
   renderSettingsProject();
-  toast('已保存');
+  toast(editingProjectId ? '已保存' : '项目已创建');
 };
 
 document.getElementById('btn-delete-project').onclick = async () => {
