@@ -1217,7 +1217,7 @@ async function sendMessage() {
     isStreaming = false;
     abortController = null;
     clearTimeout(renderTimer);
-    document.getElementById('btn-send').disabled = !chatInput.value.trim();
+    document.getElementById('btn-send').disabled = false;
   }
 }
 
