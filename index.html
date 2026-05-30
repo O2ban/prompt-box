@@ -488,15 +488,14 @@ input, textarea { font-family: inherit; font-size: 15px; }
         <div class="form-group">
           <label class="form-label">模型列表</label>
           <div class="model-tags" id="p-model-tags"></div>
-          <div class="add-model-row">
-            <input class="form-input" id="p-model-name" placeholder="显示名（如 DeepSeek V3）">
-            <input class="form-input" id="p-model-id" placeholder="模型 ID（如 deepseek-chat）">
-            <button class="btn-secondary" id="btn-add-model-tag" style="white-space:nowrap;padding:10px 12px">+</button>
-          </div>
-          <div class="add-model-row" style="margin-top:6px">
-            <input class="form-input" id="p-model-tokens" type="number" placeholder="Max Tokens（默认 8192）" style="width:0;flex:1;min-width:0;font-size:13px">
-            <input class="form-input" id="p-model-temp" type="number" step="0.1" placeholder="Temperature（可选）" style="width:0;flex:1;min-width:0;font-size:13px">
-            <input class="form-input" id="p-model-topp" type="number" step="0.1" placeholder="Top P（可选）" style="width:0;flex:1;min-width:0;font-size:13px">
+          <div style="background:var(--bg);border-radius:8px;padding:10px 12px;margin-top:8px">
+            <div style="font-size:12px;color:var(--text-3);margin-bottom:8px;font-weight:500">添加模型</div>
+            <input class="form-input" id="p-model-name" placeholder="显示名（如 DeepSeek V3）" style="margin-bottom:6px">
+            <input class="form-input" id="p-model-id" placeholder="模型 ID（如 deepseek-chat）" style="margin-bottom:8px">
+            <input class="form-input" id="p-model-tokens" type="number" placeholder="Max Tokens（默认 8192）" style="margin-bottom:6px">
+            <input class="form-input" id="p-model-temp" type="number" step="0.1" placeholder="Temperature（可选，如 0.7）" style="margin-bottom:6px">
+            <input class="form-input" id="p-model-topp" type="number" step="0.1" placeholder="Top P（可选，如 0.9）" style="margin-bottom:8px">
+            <button class="btn-secondary" id="btn-add-model-tag" style="width:100%;padding:9px 12px">+ 添加</button>
           </div>
         </div>
       </div>
