@@ -683,6 +683,7 @@ let pendingAssembledText = null;
 let isStreaming = false;
 let abortController = null;
 let tempModelTags = [];
+let editingModelIndex = -1;
 
 // ===== LOAD =====
 async function loadAll() {
@@ -1355,8 +1356,12 @@ function openProviderEditor(id) {
   document.getElementById('p-url').value = p?.baseUrl || '';
   document.getElementById('p-key').value = p?.apiKey || '';
   tempModelTags = p ? JSON.parse(JSON.stringify(p.models || [])) : [];
+  editingModelIndex = -1;
   document.getElementById('p-model-name').value = '';
   document.getElementById('p-model-id').value = '';
+  document.getElementById('p-model-tokens').value = '';
+  document.getElementById('p-model-temp').value = '';
+  document.getElementById('p-model-topp').value = '';
   document.getElementById('btn-delete-provider').style.display = p ? 'block' : 'none';
   renderModelTags();
   document.getElementById('overlay-provider').classList.add('active');
@@ -1371,7 +1376,7 @@ function renderModelTags() {
     if (m.temperature != null) parts.push(`T=${m.temperature}`);
     if (m.topP != null) parts.push(`p=${m.topP}`);
     if (parts.length) info += ` · ${parts.join(' ')}`;
-    return `<div class="model-tag">
+    return `<div class="model-tag" data-edit-tag="${i}" style="cursor:pointer">
       <span>${esc(m.name)}</span>
       <span style="font-size:11px;opacity:0.7">${info}</span>
       <button class="model-tag-del" data-del-tag="${i}">×</button>
@@ -1379,9 +1384,33 @@ function renderModelTags() {
   }).join('');
 }
 
+function populateModelForm(i) {
+  const m = tempModelTags[i];
+  if (!m) return;
+  editingModelIndex = i;
+  document.getElementById('p-model-name').value = m.name;
+  document.getElementById('p-model-id').value = m.id;
+  document.getElementById('p-model-tokens').value = m.maxTokens || '';
+  document.getElementById('p-model-temp').value = m.temperature != null ? m.temperature : '';
+  document.getElementById('p-model-topp').value = m.topP != null ? m.topP : '';
+  document.getElementById('btn-add-model-tag').textContent = '更新';
+}
+
+function clearModelForm() {
+  editingModelIndex = -1;
+  document.getElementById('p-model-name').value = '';
+  document.getElementById('p-model-id').value = '';
+  document.getElementById('p-model-tokens').value = '';
+  document.getElementById('p-model-temp').value = '';
+  document.getElementById('p-model-topp').value = '';
+  document.getElementById('btn-add-model-tag').textContent = '+ 添加';
+}
+
 document.getElementById('p-model-tags').addEventListener('click', e => {
-  const i = e.target.closest('[data-del-tag]')?.dataset.delTag;
-  if (i !== undefined) { tempModelTags.splice(Number(i), 1); renderModelTags(); }
+  const del = e.target.closest('[data-del-tag]')?.dataset.delTag;
+  if (del !== undefined) { tempModelTags.splice(Number(del), 1); if (editingModelIndex >= Number(del)) editingModelIndex--; renderModelTags(); clearModelForm(); return; }
+  const edit = e.target.closest('[data-edit-tag]')?.dataset.editTag;
+  if (edit !== undefined) populateModelForm(Number(edit));
 });
 
 document.getElementById('btn-add-model-tag').onclick = () => {
@@ -1395,12 +1424,12 @@ document.getElementById('btn-add-model-tag').onclick = () => {
   if (maxTokens > 0) model.maxTokens = maxTokens;
   if (!isNaN(temperature)) model.temperature = temperature;
   if (!isNaN(topP)) model.topP = topP;
-  tempModelTags.push(model);
-  document.getElementById('p-model-name').value = '';
-  document.getElementById('p-model-id').value = '';
-  document.getElementById('p-model-tokens').value = '';
-  document.getElementById('p-model-temp').value = '';
-  document.getElementById('p-model-topp').value = '';
+  if (editingModelIndex >= 0) {
+    tempModelTags[editingModelIndex] = model;
+  } else {
+    tempModelTags.push(model);
+  }
+  clearModelForm();
   renderModelTags();
 };
 
