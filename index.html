@@ -330,6 +330,9 @@ input, textarea { font-family: inherit; font-size: 15px; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
       <h1 id="header-project-name" style="font-size:16px">项目</h1>
+      <button class="header-btn" id="btn-sync" title="GitHub 同步" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
       <button class="header-btn" id="btn-new-file" title="新建文件">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
@@ -513,11 +516,51 @@ input, textarea { font-family: inherit; font-size: 15px; }
           <label class="form-label">项目名称</label>
           <input class="form-input" id="proj-name" placeholder="如：小说项目、工作笔记">
         </div>
+        <div style="font-size:12px;color:var(--text-3);padding:4px 0 8px;text-transform:uppercase;letter-spacing:0.5px;margin-top:8px">GitHub 同步（可选）</div>
+        <div class="form-group">
+          <label class="form-label">Personal Access Token</label>
+          <input class="form-input" id="proj-pat" type="text" placeholder="ghp_...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">仓库（owner/repo）</label>
+          <input class="form-input" id="proj-repo" placeholder="如：O2ban/novel-data">
+        </div>
+        <div class="form-group">
+          <label class="form-label">目录前缀</label>
+          <input class="form-input" id="proj-dir" placeholder="如：小说项目（留空则同步根目录）">
+        </div>
+        <div class="form-group">
+          <label class="form-label">分支</label>
+          <input class="form-input" id="proj-branch" placeholder="main">
+        </div>
       </div>
       <div class="sheet-footer">
         <button class="btn-danger" id="btn-delete-project" style="display:none">删除</button>
         <button class="btn-secondary" id="btn-cancel-project" style="flex:1">取消</button>
         <button class="btn-primary" id="btn-save-project" style="flex:1">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 同步 sheet -->
+  <div class="overlay" id="overlay-sync" style="z-index:250">
+    <div class="sheet">
+      <div class="sheet-header">
+        <span class="sheet-title">GitHub 同步</span>
+        <button class="sheet-close" id="btn-close-sync">×</button>
+      </div>
+      <div class="sheet-body">
+        <div id="sync-log" style="font-size:13px;line-height:1.8;color:var(--text-2);min-height:60px;white-space:pre-wrap;word-break:break-all"></div>
+      </div>
+      <div class="sheet-footer" style="flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px">
+          <button class="btn-secondary" id="btn-sync-pull" style="flex:1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" style="vertical-align:middle;margin-right:4px"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="3" x2="12" y2="21"/></svg>拉取
+          </button>
+          <button class="btn-primary" id="btn-sync-push" style="flex:1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" style="vertical-align:middle;margin-right:4px"><polyline points="16 7 12 3 8 7"/><line x1="12" y1="3" x2="12" y2="21"/></svg>推送
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1165,6 +1208,7 @@ function openProject(id) {
   selectedFileIds = [];
   const proj = projects.find(p => p.id === id);
   document.getElementById('header-project-name').textContent = proj?.name || '项目';
+  document.getElementById('btn-sync').style.display = proj?.githubRepo ? '' : 'none';
   document.getElementById('project-screen').classList.remove('active');
   newChat();
   renderFiles();
@@ -1185,6 +1229,10 @@ function openProjectEditor(id) {
   const p = id ? projects.find(x => x.id === id) : null;
   document.getElementById('project-sheet-title').textContent = p ? '编辑项目' : '新建项目';
   document.getElementById('proj-name').value = p?.name || '';
+  document.getElementById('proj-pat').value = p?.githubPAT || '';
+  document.getElementById('proj-repo').value = p?.githubRepo || '';
+  document.getElementById('proj-dir').value = p?.githubDir || '';
+  document.getElementById('proj-branch').value = p?.githubBranch || '';
   document.getElementById('btn-delete-project').style.display = p ? 'block' : 'none';
   document.getElementById('overlay-project').classList.add('active');
   setTimeout(() => document.getElementById('proj-name').focus(), 100);
@@ -1193,13 +1241,20 @@ function openProjectEditor(id) {
 document.getElementById('btn-save-project').onclick = async () => {
   const name = document.getElementById('proj-name').value.trim();
   if (!name) { toast('请输入项目名称'); return; }
+  const githubPAT = document.getElementById('proj-pat').value.trim();
+  const githubRepo = document.getElementById('proj-repo').value.trim();
+  const githubDir = document.getElementById('proj-dir').value.trim().replace(/^\/|\/$/g, '');
+  const githubBranch = document.getElementById('proj-branch').value.trim() || 'main';
   if (editingProjectId) {
     const p = projects.find(x => x.id === editingProjectId);
-    p.name = name; p.updatedAt = ts();
+    Object.assign(p, { name, githubPAT, githubRepo, githubDir, githubBranch, updatedAt: ts() });
     await dbPut('projects', p);
-    if (currentProjectId === editingProjectId) document.getElementById('header-project-name').textContent = name;
+    if (currentProjectId === editingProjectId) {
+      document.getElementById('header-project-name').textContent = name;
+      document.getElementById('btn-sync').style.display = githubRepo ? '' : 'none';
+    }
   } else {
-    const p = { id: uuid(), name, createdAt: ts(), updatedAt: ts() };
+    const p = { id: uuid(), name, githubPAT, githubRepo, githubDir, githubBranch, createdAt: ts(), updatedAt: ts() };
     projects.push(p);
     await dbPut('projects', p);
   }
@@ -1364,8 +1419,129 @@ document.getElementById('import-input').onchange = async e => {
   e.target.value = '';
 };
 
+// ===== GITHUB SYNC =====
+document.getElementById('btn-sync').onclick = () => {
+  document.getElementById('sync-log').textContent = '';
+  document.getElementById('overlay-sync').classList.add('active');
+};
+document.getElementById('btn-close-sync').onclick = () => document.getElementById('overlay-sync').classList.remove('active');
+
+function syncLog(msg) {
+  const el = document.getElementById('sync-log');
+  el.textContent += msg + '\n';
+}
+
+function ghHeaders(pat) {
+  return { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+}
+
+async function ghListTree(pat, repo, branch) {
+  const r = await fetch(`https://api.github.com/repos/${repo}/git/trees/${branch}?recursive=1`, { headers: ghHeaders(pat) });
+  if (!r.ok) throw new Error(`GitHub API ${r.status}: ${await r.text()}`);
+  const j = await r.json();
+  return j.tree.filter(x => x.type === 'blob');
+}
+
+async function ghGetFile(pat, repo, path, branch) {
+  const r = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path)}?ref=${branch}`, { headers: ghHeaders(pat) });
+  if (!r.ok) throw new Error(`获取文件失败 ${r.status}`);
+  return await r.json(); // { content (base64), sha, ... }
+}
+
+async function ghPutFile(pat, repo, path, content, sha, branch, message) {
+  const body = { message, content: btoa(unescape(encodeURIComponent(content))), branch };
+  if (sha) body.sha = sha;
+  const r = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path)}`, {
+    method: 'PUT', headers: { ...ghHeaders(pat), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`写入文件失败 ${r.status}: ${await r.text()}`);
+  const j = await r.json();
+  return j.content.sha;
+}
+
+document.getElementById('btn-sync-pull').onclick = async () => {
+  const proj = projects.find(p => p.id === currentProjectId);
+  if (!proj?.githubRepo || !proj?.githubPAT) { syncLog('请先在项目设置中配置 GitHub 信息'); return; }
+  document.getElementById('btn-sync-pull').disabled = true;
+  document.getElementById('btn-sync-push').disabled = true;
+  syncLog('开始拉取...');
+  try {
+    const dir = proj.githubDir ? proj.githubDir + '/' : '';
+    const tree = await ghListTree(proj.githubPAT, proj.githubRepo, proj.githubBranch || 'main');
+    const targets = tree.filter(x => {
+      if (dir && !x.path.startsWith(dir)) return false;
+      return /\.(md|txt)$/i.test(x.path);
+    });
+    syncLog(`找到 ${targets.length} 个文件`);
+    let created = 0, updated = 0, skipped = 0;
+    for (const item of targets) {
+      const fileData = await ghGetFile(proj.githubPAT, proj.githubRepo, item.path, proj.githubBranch || 'main');
+      const remoteContent = decodeURIComponent(escape(atob(fileData.content.replace(/\n/g, ''))));
+      const remoteSha = fileData.sha;
+      const relPath = dir ? item.path.slice(dir.length) : item.path;
+      const parts = relPath.split('/');
+      const fileName = parts.pop().replace(/\.(md|txt)$/i, '');
+      const folder = parts.join('/');
+      const existing = files.find(f => f.projectId === currentProjectId && f.githubPath === item.path);
+      if (existing) {
+        if (existing.githubSha === remoteSha) { skipped++; continue; }
+        const ok = await confirm('文件有更新', `「${existing.name}」远端有更新，覆盖本地？`, '覆盖');
+        if (!ok) { skipped++; continue; }
+        existing.content = remoteContent; existing.githubSha = remoteSha; existing.updatedAt = ts();
+        await dbPut('files', existing);
+        updated++;
+      } else {
+        const f = { id: uuid(), name: fileName, content: remoteContent, folder, githubPath: item.path, githubSha: remoteSha, projectId: currentProjectId, createdAt: ts(), updatedAt: ts() };
+        files.unshift(f);
+        await dbPut('files', f);
+        created++;
+      }
+      syncLog(`  ✓ ${relPath}`);
+    }
+    syncLog(`完成：新增 ${created}，更新 ${updated}，跳过 ${skipped}`);
+    renderFiles();
+  } catch (e) { syncLog('错误：' + e.message); }
+  document.getElementById('btn-sync-pull').disabled = false;
+  document.getElementById('btn-sync-push').disabled = false;
+};
+
+document.getElementById('btn-sync-push').onclick = async () => {
+  const proj = projects.find(p => p.id === currentProjectId);
+  if (!proj?.githubRepo || !proj?.githubPAT) { syncLog('请先在项目设置中配置 GitHub 信息'); return; }
+  document.getElementById('btn-sync-pull').disabled = true;
+  document.getElementById('btn-sync-push').disabled = true;
+  syncLog('开始推送...');
+  const branch = proj.githubBranch || 'main';
+  const dir = proj.githubDir ? proj.githubDir + '/' : '';
+  const projectFiles = files.filter(f => f.projectId === currentProjectId);
+  let pushed = 0, failed = 0;
+  try {
+    for (const f of projectFiles) {
+      const ext = /\.(md|txt)$/i.test(f.name) ? '' : '.md';
+      const relPath = f.folder ? `${f.folder}/${f.name}${ext}` : `${f.name}${ext}`;
+      const ghPath = dir + relPath;
+      let sha = f.githubSha || null;
+      if (!sha && f.githubPath) {
+        try { const d = await ghGetFile(proj.githubPAT, proj.githubRepo, f.githubPath, branch); sha = d.sha; } catch {}
+      }
+      try {
+        const newSha = await ghPutFile(proj.githubPAT, proj.githubRepo, f.githubPath || ghPath, f.content, sha, branch, `update ${f.name}`);
+        f.githubPath = f.githubPath || ghPath;
+        f.githubSha = newSha;
+        f.updatedAt = ts();
+        await dbPut('files', f);
+        syncLog(`  ✓ ${relPath}`);
+        pushed++;
+      } catch (e) { syncLog(`  ✗ ${relPath}: ${e.message}`); failed++; }
+    }
+    syncLog(`完成：推送 ${pushed}，失败 ${failed}`);
+  } catch (e) { syncLog('错误：' + e.message); }
+  document.getElementById('btn-sync-pull').disabled = false;
+  document.getElementById('btn-sync-push').disabled = false;
+};
+
 // ===== UTILS =====
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); }
   catch { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); }
