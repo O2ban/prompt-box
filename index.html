@@ -301,6 +301,23 @@ input, textarea { font-family: inherit; font-size: 15px; }
 /* Streaming cursor */
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 .cursor { display: inline-block; width: 2px; height: 14px; background: var(--text); animation: blink 1s infinite; vertical-align: middle; margin-left: 2px; }
+
+/* Project list */
+.project-screen { background: var(--bg); }
+.project-item {
+  background: var(--bg-card); border-radius: var(--radius);
+  border: 1px solid var(--border); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 0;
+}
+.project-item-body { flex: 1; padding: 14px 16px; cursor: pointer; min-width: 0; }
+.project-item-body:active { background: var(--primary-light); border-radius: var(--radius) 0 0 var(--radius); }
+.project-name { font-size: 16px; font-weight: 600; }
+.project-meta { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+.project-edit-btn {
+  width: 44px; height: 100%; display: flex; align-items: center; justify-content: center;
+  color: var(--text-3); border-left: 1px solid var(--border); flex-shrink: 0; padding: 14px 0;
+}
+.project-edit-btn:active { background: var(--bg); }
 </style>
 </head>
 <body>
@@ -308,7 +325,10 @@ input, textarea { font-family: inherit; font-size: 15px; }
   <!-- ===== TAB: 文件 ===== -->
   <div class="tab-content active" id="tab-files">
     <div class="header">
-      <h1>文件库</h1>
+      <button class="header-btn" id="btn-back-projects" title="返回项目列表">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <h1 id="header-project-name" style="font-size:16px">项目</h1>
       <button class="header-btn" id="btn-new-file" title="新建文件">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
@@ -469,6 +489,38 @@ input, textarea { font-family: inherit; font-size: 15px; }
     </div>
   </div>
 
+  <!-- 项目列表 -->
+  <div class="fullscreen active project-screen" id="project-screen">
+    <div class="header">
+      <h1>我的项目</h1>
+      <button class="header-btn" id="btn-new-project" title="新建项目">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+    <div class="list-area" id="project-list"></div>
+  </div>
+
+  <!-- 项目编辑 sheet -->
+  <div class="overlay" id="overlay-project">
+    <div class="sheet">
+      <div class="sheet-header">
+        <span class="sheet-title" id="project-sheet-title">新建项目</span>
+        <button class="sheet-close" id="btn-close-project">×</button>
+      </div>
+      <div class="sheet-body">
+        <div class="form-group">
+          <label class="form-label">项目名称</label>
+          <input class="form-input" id="proj-name" placeholder="如：小说项目、工作笔记">
+        </div>
+      </div>
+      <div class="sheet-footer">
+        <button class="btn-danger" id="btn-delete-project" style="display:none">删除</button>
+        <button class="btn-secondary" id="btn-cancel-project" style="flex:1">取消</button>
+        <button class="btn-primary" id="btn-save-project" style="flex:1">保存</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 文件编辑器 -->
   <div class="fullscreen" id="editor-screen">
     <div class="editor-header">
@@ -516,7 +568,7 @@ input, textarea { font-family: inherit; font-size: 15px; }
 </div>
 <script>
 // ===== DB =====
-const DB_NAME = 'promptbox', DB_VER = 1;
+const DB_NAME = 'promptbox', DB_VER = 2;
 let db;
 function openDB() {
   return new Promise((res, rej) => {
@@ -526,6 +578,7 @@ function openDB() {
       if (!d.objectStoreNames.contains('files')) d.createObjectStore('files', {keyPath:'id'});
       if (!d.objectStoreNames.contains('conversations')) d.createObjectStore('conversations', {keyPath:'id'});
       if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', {keyPath:'key'});
+      if (!d.objectStoreNames.contains('projects')) d.createObjectStore('projects', {keyPath:'id'});
     };
     req.onsuccess = e => { db = e.target.result; res(db); };
     req.onerror = e => rej(e);
@@ -572,11 +625,13 @@ function fmtDate(t) {
 }
 
 // ===== STATE =====
-let files = [], providers = [], conversations = [], settings = {};
+let files = [], providers = [], conversations = [], settings = {}, projects = [];
+let currentProjectId = null;
 let currentConvId = null;
 let selectedFileIds = []; // 有序数组，维护拼装顺序
 let editingFileId = null;
 let editingProviderId = null;
+let editingProjectId = null;
 let pendingAssembledText = null;
 let isStreaming = false;
 let abortController = null;
@@ -584,10 +639,31 @@ let tempModelTags = [];
 
 // ===== LOAD =====
 async function loadAll() {
-  files = await dbGetAll('files');
-  files.sort((a,b) => b.updatedAt - a.updatedAt);
-  conversations = await dbGetAll('conversations');
-  conversations.sort((a,b) => b.updatedAt - a.updatedAt);
+  projects = await dbGetAll('projects');
+  projects.sort((a,b) => a.createdAt - b.createdAt);
+
+  const allFiles = await dbGetAll('files');
+  const allConvs = await dbGetAll('conversations');
+
+  // 迁移：旧数据没有 projectId，分配到默认项目
+  const needsMigration = (allFiles.some(f => !f.projectId) || allConvs.some(c => !c.projectId));
+  if (needsMigration) {
+    let defaultProj = projects.find(p => p.name === '默认项目') || projects[0];
+    if (!defaultProj) {
+      defaultProj = { id: uuid(), name: '默认项目', createdAt: ts(), updatedAt: ts() };
+      projects.push(defaultProj);
+      await dbPut('projects', defaultProj);
+    }
+    for (const f of allFiles) {
+      if (!f.projectId) { f.projectId = defaultProj.id; await dbPut('files', f); }
+    }
+    for (const c of allConvs) {
+      if (!c.projectId) { c.projectId = defaultProj.id; await dbPut('conversations', c); }
+    }
+  }
+
+  files = allFiles.sort((a,b) => b.updatedAt - a.updatedAt);
+  conversations = allConvs.sort((a,b) => b.updatedAt - a.updatedAt);
   const s = await dbGet('settings', 'main');
   settings = s ? s.data : { providers: [], currentProviderId: null, currentModelId: null };
   providers = settings.providers || [];
@@ -638,10 +714,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // ===== FILES =====
 function renderFiles() {
   const el = document.getElementById('file-list');
-  if (!files.length) {
+  const projectFiles = files.filter(f => f.projectId === currentProjectId);
+  if (!projectFiles.length) {
     el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>还没有文件，点右上角 + 新建</p></div>`;
   } else {
-    el.innerHTML = files.map(f => `
+    el.innerHTML = projectFiles.map(f => `
       <div class="file-item ${selectedFileIds.includes(f.id) ? 'checked' : ''}" data-id="${f.id}">
         <div class="file-check" data-check="${f.id}">
           <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
@@ -731,7 +808,7 @@ async function saveAndCloseEditor() {
     if (f) { f.name = name; f.content = content; f.updatedAt = ts(); await dbPut('files', f); }
   } else {
     if (content.trim() || name !== '未命名文件') {
-      const f = { id: uuid(), name, content, createdAt: ts(), updatedAt: ts() };
+      const f = { id: uuid(), name, content, projectId: currentProjectId, createdAt: ts(), updatedAt: ts() };
       files.unshift(f);
       await dbPut('files', f);
     }
@@ -879,7 +956,7 @@ document.getElementById('btn-close-history').onclick = () => document.getElement
 
 function openHistory() {
   const el = document.getElementById('history-list');
-  const sorted = [...conversations].sort((a,b) => b.updatedAt - a.updatedAt);
+  const sorted = conversations.filter(c => c.projectId === currentProjectId).sort((a,b) => b.updatedAt - a.updatedAt);
   if (!sorted.length) {
     el.innerHTML = `<div class="empty"><p>暂无历史对话</p></div>`;
   } else {
@@ -973,7 +1050,7 @@ async function sendMessage() {
   if (!currentConvId) {
     currentConvId = uuid();
     const title = text.slice(0, 30) + (text.length > 30 ? '...' : '');
-    const conv = { id: currentConvId, title, providerId: p.id, modelId: m.id, messages: [], createdAt: ts(), updatedAt: ts() };
+    const conv = { id: currentConvId, title, projectId: currentProjectId, providerId: p.id, modelId: m.id, messages: [], createdAt: ts(), updatedAt: ts() };
     conversations.unshift(conv);
     await dbPut('conversations', conv);
   }
@@ -1052,6 +1129,100 @@ async function sendMessage() {
     document.getElementById('btn-send').disabled = !chatInput.value.trim();
   }
 }
+
+// ===== PROJECTS =====
+function renderProjects() {
+  const el = document.getElementById('project-list');
+  if (!projects.length) {
+    el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><p>还没有项目，点右上角 + 新建</p></div>`;
+    return;
+  }
+  el.innerHTML = projects.map(p => {
+    const fc = files.filter(f => f.projectId === p.id).length;
+    return `<div class="project-item">
+      <div class="project-item-body" data-open-project="${p.id}">
+        <div class="project-name">${esc(p.name)}</div>
+        <div class="project-meta">${fc} 个文件 · ${fmtDate(p.updatedAt)}</div>
+      </div>
+      <button class="project-edit-btn" data-edit-project="${p.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('project-list').addEventListener('click', e => {
+  const openId = e.target.closest('[data-open-project]')?.dataset.openProject;
+  const editId = e.target.closest('[data-edit-project]')?.dataset.editProject;
+  if (openId) openProject(openId);
+  else if (editId) openProjectEditor(editId);
+});
+
+function openProject(id) {
+  currentProjectId = id;
+  currentConvId = null;
+  selectedFileIds = [];
+  const proj = projects.find(p => p.id === id);
+  document.getElementById('header-project-name').textContent = proj?.name || '项目';
+  document.getElementById('project-screen').classList.remove('active');
+  newChat();
+  renderFiles();
+  renderCurrentModel();
+}
+
+document.getElementById('btn-back-projects').onclick = () => {
+  document.getElementById('project-screen').classList.add('active');
+  renderProjects();
+};
+
+document.getElementById('btn-new-project').onclick = () => openProjectEditor(null);
+document.getElementById('btn-close-project').onclick = () => document.getElementById('overlay-project').classList.remove('active');
+document.getElementById('btn-cancel-project').onclick = () => document.getElementById('overlay-project').classList.remove('active');
+
+function openProjectEditor(id) {
+  editingProjectId = id;
+  const p = id ? projects.find(x => x.id === id) : null;
+  document.getElementById('project-sheet-title').textContent = p ? '编辑项目' : '新建项目';
+  document.getElementById('proj-name').value = p?.name || '';
+  document.getElementById('btn-delete-project').style.display = p ? 'block' : 'none';
+  document.getElementById('overlay-project').classList.add('active');
+  setTimeout(() => document.getElementById('proj-name').focus(), 100);
+}
+
+document.getElementById('btn-save-project').onclick = async () => {
+  const name = document.getElementById('proj-name').value.trim();
+  if (!name) { toast('请输入项目名称'); return; }
+  if (editingProjectId) {
+    const p = projects.find(x => x.id === editingProjectId);
+    p.name = name; p.updatedAt = ts();
+    await dbPut('projects', p);
+    if (currentProjectId === editingProjectId) document.getElementById('header-project-name').textContent = name;
+  } else {
+    const p = { id: uuid(), name, createdAt: ts(), updatedAt: ts() };
+    projects.push(p);
+    await dbPut('projects', p);
+  }
+  document.getElementById('overlay-project').classList.remove('active');
+  renderProjects();
+  toast('已保存');
+};
+
+document.getElementById('btn-delete-project').onclick = async () => {
+  const fc = files.filter(f => f.projectId === editingProjectId).length;
+  const cc = conversations.filter(c => c.projectId === editingProjectId).length;
+  const ok = await confirm('删除项目', `确定删除此项目？项目内 ${fc} 个文件、${cc} 条对话将一并删除，不可撤销。`);
+  if (!ok) return;
+  for (const f of files.filter(x => x.projectId === editingProjectId)) await dbDelete('files', f.id);
+  for (const c of conversations.filter(x => x.projectId === editingProjectId)) await dbDelete('conversations', c.id);
+  await dbDelete('projects', editingProjectId);
+  files = files.filter(f => f.projectId !== editingProjectId);
+  conversations = conversations.filter(c => c.projectId !== editingProjectId);
+  projects = projects.filter(p => p.id !== editingProjectId);
+  if (currentProjectId === editingProjectId) { currentProjectId = null; currentConvId = null; }
+  document.getElementById('overlay-project').classList.remove('active');
+  renderProjects();
+  toast('已删除');
+};
 
 // ===== SETTINGS / PROVIDERS =====
 function renderProviders() {
@@ -1157,7 +1328,7 @@ async function saveSettings() {
 document.getElementById('btn-reload').onclick = () => location.reload(true);
 
 document.getElementById('btn-export').onclick = async () => {
-  const data = { version: 1, exportedAt: new Date().toISOString(), files, conversations, settings };
+  const data = { version: 2, exportedAt: new Date().toISOString(), projects, files, conversations, settings };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1177,11 +1348,12 @@ document.getElementById('import-input').onchange = async e => {
   try {
     const text = await file.text();
     const data = JSON.parse(text);
+    for (const p of (data.projects || [])) await dbPut('projects', p);
     for (const f of (data.files || [])) await dbPut('files', f);
     for (const c of (data.conversations || [])) await dbPut('conversations', c);
     if (data.settings) await dbPut('settings', { key: 'main', data: data.settings });
     await loadAll();
-    renderFiles();
+    renderProjects();
     renderProviders();
     renderCurrentModel();
     toast('导入成功');
@@ -1202,7 +1374,7 @@ async function copyText(text) {
 (async () => {
   await openDB();
   await loadAll();
-  renderFiles();
+  renderProjects();
   renderCurrentModel();
 })();
 </script>
