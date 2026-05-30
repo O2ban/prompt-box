@@ -741,7 +741,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('tab-' + tab).classList.add('active');
-    if (tab === 'settings') renderProviders();
+    if (tab === 'settings') { renderProviders(); renderProjectManageList(); }
   });
 });
 
@@ -1531,6 +1531,7 @@ document.getElementById('btn-sync-push').onclick = async () => {
 };
 
 // ===== UTILS =====
+function esc(str) { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); }
   catch { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); }
