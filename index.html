@@ -493,6 +493,11 @@ input, textarea { font-family: inherit; font-size: 15px; }
             <input class="form-input" id="p-model-id" placeholder="模型 ID（如 deepseek-chat）">
             <button class="btn-secondary" id="btn-add-model-tag" style="white-space:nowrap;padding:10px 12px">+</button>
           </div>
+          <div class="add-model-row" style="margin-top:6px">
+            <input class="form-input" id="p-model-tokens" type="number" placeholder="Max Tokens（默认 8192）" style="width:0;flex:1;min-width:0;font-size:13px">
+            <input class="form-input" id="p-model-temp" type="number" step="0.1" placeholder="Temperature（可选）" style="width:0;flex:1;min-width:0;font-size:13px">
+            <input class="form-input" id="p-model-topp" type="number" step="0.1" placeholder="Top P（可选）" style="width:0;flex:1;min-width:0;font-size:13px">
+          </div>
         </div>
       </div>
       <div class="sheet-footer">
@@ -1133,10 +1138,14 @@ async function sendMessage() {
   const supportsStream = typeof ReadableStream !== 'undefined' && typeof TextDecoder !== 'undefined';
 
   try {
+    const reqBody = { model: m.id, messages: conv.messages.map(x => ({role:x.role,content:x.content})), stream: supportsStream };
+    if (m.maxTokens) reqBody.max_tokens = m.maxTokens;
+    if (m.temperature != null) reqBody.temperature = m.temperature;
+    if (m.topP != null) reqBody.top_p = m.topP;
     const resp = await fetch(`${p.baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${p.apiKey}` },
-      body: JSON.stringify({ model: m.id, messages: conv.messages.map(x => ({role:x.role,content:x.content})), stream: supportsStream, max_tokens: 8192 }),
+      body: JSON.stringify(reqBody),
       signal: abortController.signal
     });
 
@@ -1356,12 +1365,19 @@ function openProviderEditor(id) {
 
 function renderModelTags() {
   const el = document.getElementById('p-model-tags');
-  el.innerHTML = tempModelTags.map((m, i) => `
-    <div class="model-tag">
+  el.innerHTML = tempModelTags.map((m, i) => {
+    let info = esc(m.id);
+    const parts = [];
+    if (m.maxTokens) parts.push(`≤${m.maxTokens}t`);
+    if (m.temperature != null) parts.push(`T=${m.temperature}`);
+    if (m.topP != null) parts.push(`p=${m.topP}`);
+    if (parts.length) info += ` · ${parts.join(' ')}`;
+    return `<div class="model-tag">
       <span>${esc(m.name)}</span>
-      <span style="font-size:11px;opacity:0.7">${esc(m.id)}</span>
+      <span style="font-size:11px;opacity:0.7">${info}</span>
       <button class="model-tag-del" data-del-tag="${i}">×</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 document.getElementById('p-model-tags').addEventListener('click', e => {
@@ -1373,9 +1389,19 @@ document.getElementById('btn-add-model-tag').onclick = () => {
   const name = document.getElementById('p-model-name').value.trim();
   const id = document.getElementById('p-model-id').value.trim();
   if (!name || !id) { toast('请填写模型名称和 ID'); return; }
-  tempModelTags.push({ name, id });
+  const maxTokens = parseInt(document.getElementById('p-model-tokens').value) || 0;
+  const temperature = parseFloat(document.getElementById('p-model-temp').value);
+  const topP = parseFloat(document.getElementById('p-model-topp').value);
+  const model = { name, id };
+  if (maxTokens > 0) model.maxTokens = maxTokens;
+  if (!isNaN(temperature)) model.temperature = temperature;
+  if (!isNaN(topP)) model.topP = topP;
+  tempModelTags.push(model);
   document.getElementById('p-model-name').value = '';
   document.getElementById('p-model-id').value = '';
+  document.getElementById('p-model-tokens').value = '';
+  document.getElementById('p-model-temp').value = '';
+  document.getElementById('p-model-topp').value = '';
   renderModelTags();
 };
 
