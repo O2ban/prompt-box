@@ -574,7 +574,7 @@ function fmtDate(t) {
 // ===== STATE =====
 let files = [], providers = [], conversations = [], settings = {};
 let currentConvId = null;
-let selectedFiles = new Set();
+let selectedFileIds = []; // 有序数组，维护拼装顺序
 let editingFileId = null;
 let editingProviderId = null;
 let pendingAssembledText = null;
@@ -642,7 +642,7 @@ function renderFiles() {
     el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>还没有文件，点右上角 + 新建</p></div>`;
   } else {
     el.innerHTML = files.map(f => `
-      <div class="file-item ${selectedFiles.has(f.id) ? 'checked' : ''}" data-id="${f.id}">
+      <div class="file-item ${selectedFileIds.includes(f.id) ? 'checked' : ''}" data-id="${f.id}">
         <div class="file-check" data-check="${f.id}">
           <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
@@ -666,9 +666,9 @@ function renderFiles() {
 function updateAssembleBar() {
   const bar = document.getElementById('assemble-bar');
   const cnt = document.getElementById('assemble-count');
-  if (selectedFiles.size > 0) {
+  if (selectedFileIds.length > 0) {
     bar.classList.remove('hidden');
-    cnt.textContent = `已选 ${selectedFiles.size} 个文件`;
+    cnt.textContent = `已选 ${selectedFileIds.length} 个文件`;
   } else {
     bar.classList.add('hidden');
   }
@@ -681,8 +681,11 @@ document.getElementById('file-list').addEventListener('click', async e => {
   const delId = e.target.closest('[data-del-file]')?.dataset.delFile;
 
   if (checkId) {
-    if (selectedFiles.has(checkId)) selectedFiles.delete(checkId);
-    else selectedFiles.add(checkId);
+    if (selectedFileIds.includes(checkId)) {
+      selectedFileIds = selectedFileIds.filter(id => id !== checkId);
+    } else {
+      selectedFileIds.push(checkId);
+    }
     renderFiles();
   } else if (editId) {
     openEditor(editId);
@@ -696,7 +699,7 @@ document.getElementById('file-list').addEventListener('click', async e => {
     if (ok) {
       await dbDelete('files', delId);
       files = files.filter(x => x.id !== delId);
-      selectedFiles.delete(delId);
+      selectedFileIds = selectedFileIds.filter(id => id !== delId);
       renderFiles();
       toast('已删除');
     }
@@ -748,16 +751,29 @@ document.getElementById('btn-assemble').onclick = openAssemble;
 
 function buildAssembledText(customPrompt) {
   const parts = [];
-  files.filter(f => selectedFiles.has(f.id)).forEach(f => {
-    parts.push(`[${f.name}]\n${f.content}`);
+  selectedFileIds.forEach(id => {
+    const f = files.find(x => x.id === id);
+    if (f) parts.push(`[${f.name}]\n${f.content}`);
   });
   if (customPrompt && customPrompt.trim()) parts.push(`---\n${customPrompt.trim()}`);
   return parts.join('\n\n');
 }
 
+function renderAssembleFileList() {
+  const el = document.getElementById('assemble-files-list');
+  el.innerHTML = selectedFileIds.map((id, i) => {
+    const f = files.find(x => x.id === id);
+    if (!f) return '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="flex:1;font-size:14px">${esc(f.name)}</span>
+      <button data-move-up="${i}" style="padding:4px 8px;border-radius:6px;background:var(--bg);border:1px solid var(--border);font-size:13px;color:var(--text-2);${i===0?'opacity:0.3;pointer-events:none':''}">↑</button>
+      <button data-move-down="${i}" style="padding:4px 8px;border-radius:6px;background:var(--bg);border:1px solid var(--border);font-size:13px;color:var(--text-2);${i===selectedFileIds.length-1?'opacity:0.3;pointer-events:none':''}">↓</button>
+    </div>`;
+  }).join('');
+}
+
 function openAssemble() {
-  const sel = files.filter(f => selectedFiles.has(f.id));
-  document.getElementById('assemble-files-list').innerHTML = sel.map(f => `• ${esc(f.name)}`).join('<br>');
+  renderAssembleFileList();
   const prompt = document.getElementById('assemble-prompt').value;
   document.getElementById('assemble-preview').textContent = buildAssembledText(prompt);
   document.getElementById('overlay-assemble').classList.add('active');
@@ -766,6 +782,20 @@ function openAssemble() {
 document.getElementById('assemble-prompt').addEventListener('input', () => {
   const prompt = document.getElementById('assemble-prompt').value;
   document.getElementById('assemble-preview').textContent = buildAssembledText(prompt);
+});
+
+document.getElementById('assemble-files-list').addEventListener('click', e => {
+  const upIdx = e.target.closest('[data-move-up]')?.dataset.moveUp;
+  const downIdx = e.target.closest('[data-move-down]')?.dataset.moveDown;
+  if (upIdx !== undefined) {
+    const i = Number(upIdx);
+    if (i > 0) { [selectedFileIds[i-1], selectedFileIds[i]] = [selectedFileIds[i], selectedFileIds[i-1]]; }
+  } else if (downIdx !== undefined) {
+    const i = Number(downIdx);
+    if (i < selectedFileIds.length - 1) { [selectedFileIds[i], selectedFileIds[i+1]] = [selectedFileIds[i+1], selectedFileIds[i]]; }
+  } else { return; }
+  renderAssembleFileList();
+  document.getElementById('assemble-preview').textContent = buildAssembledText(document.getElementById('assemble-prompt').value);
 });
 
 document.getElementById('btn-close-assemble').onclick = () => document.getElementById('overlay-assemble').classList.remove('active');
