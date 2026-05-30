@@ -1271,7 +1271,7 @@ document.getElementById('btn-save-project').onclick = async () => {
     const p = { id: uuid(), name, githubPAT, githubRepo, githubDir, githubBranch, createdAt: ts(), updatedAt: ts() };
     projects.push(p);
     await dbPut('projects', p);
-    if (!currentProjectId) enterProject(p.id);
+    enterProject(p.id);
   }
   document.getElementById('overlay-project').classList.remove('active');
   renderSettingsProject();
