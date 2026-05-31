@@ -1137,6 +1137,16 @@ async function sendMessage() {
   // 检测是否支持流式读取
   const supportsStream = typeof ReadableStream !== 'undefined' && typeof TextDecoder !== 'undefined';
 
+  let full = '';
+  let renderTimer = null;
+  let pendingFlush = false;
+
+  function flushDisplay() {
+    pendingFlush = false;
+    bubble.textContent = full;
+    document.getElementById('chat-messages').scrollTop = 99999;
+  }
+
   try {
     const reqBody = { model: m.id, messages: conv.messages.map(x => ({role:x.role,content:x.content})), stream: supportsStream };
     if (m.maxTokens) reqBody.max_tokens = m.maxTokens;
@@ -1154,16 +1164,7 @@ async function sendMessage() {
       throw new Error(`API 错误 ${resp.status}: ${err.slice(0,200)}`);
     }
 
-    let full = '';
     bubble.textContent = '';
-    let renderTimer = null;
-    let pendingFlush = false;
-
-    function flushDisplay() {
-      pendingFlush = false;
-      bubble.textContent = full;
-      document.getElementById('chat-messages').scrollTop = 99999;
-    }
 
     if (supportsStream && resp.body) {
       const reader = resp.body.getReader();
@@ -1196,7 +1197,6 @@ async function sendMessage() {
       clearTimeout(renderTimer);
       flushDisplay();
     } else {
-      // 降级：非流式，一次性返回
       const json = await resp.json();
       full = json.choices?.[0]?.message?.content || '';
       bubble.textContent = full;
