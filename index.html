@@ -477,6 +477,7 @@ input, textarea { font-family: inherit; font-size: 15px; }
         </div>
         <div class="form-group">
           <label class="form-label">预览</label>
+          <div id="assemble-stats" style="font-size:12px;color:var(--text-3);text-align:right;margin:-2px 0 6px"></div>
           <div class="preview-box" id="assemble-preview"></div>
         </div>
       </div>
@@ -821,6 +822,15 @@ function getFolderMeta(projectId, folderName) {
   return folderMetas.find(m => m.projectId === projectId && m.name === folderName);
 }
 
+function ensureFolderMeta(projectId, folderName) {
+  let meta = getFolderMeta(projectId, folderName);
+  if (!meta) {
+    meta = { key: `${projectId}::${folderName}`, projectId, name: folderName, sortOrder: 9999, collapsed: false };
+    folderMetas.push(meta);
+  }
+  return meta;
+}
+
 function buildTree(projectFiles) {
   const folderMap = new Map();
   const rootFiles = [];
@@ -841,7 +851,12 @@ function buildTree(projectFiles) {
     return { name, files: fls, sortOrder: meta?.sortOrder ?? 9999, collapsed: meta?.collapsed ?? false };
   });
   folders.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'zh'));
-  return { folders, rootFiles };
+  const topItems = [
+    ...folders.map(folder => ({ type: 'folder', sortOrder: folder.sortOrder, name: folder.name, folder })),
+    ...rootFiles.map(file => ({ type: 'file', sortOrder: file.sortOrder ?? 9999, name: file.name, file }))
+  ];
+  topItems.sort((a, b) => a.sortOrder - b.sortOrder || (a.type === b.type ? a.name.localeCompare(b.name, 'zh') : a.type === 'folder' ? -1 : 1));
+  return { topItems, folders, rootFiles };
 }
 
 const DRAG_HANDLE_SVG = `<svg viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/><circle cx="3" cy="8" r="1.2"/><circle cx="7" cy="8" r="1.2"/><circle cx="3" cy="13" r="1.2"/><circle cx="7" cy="13" r="1.2"/></svg>`;
@@ -890,10 +905,8 @@ function renderFiles() {
   if (!projectFiles.length) {
     el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>还没有文件，点右上角 + 新建</p></div>`;
   } else {
-    const { folders, rootFiles } = buildTree(projectFiles);
-    let html = folders.map(renderFolderGroup).join('');
-    html += rootFiles.map(f => renderFileItem(f, false)).join('');
-    el.innerHTML = html;
+    const { topItems } = buildTree(projectFiles);
+    el.innerHTML = topItems.map(item => item.type === 'folder' ? renderFolderGroup(item.folder) : renderFileItem(item.file, false)).join('');
   }
   updateAssembleBar();
 }
@@ -1055,7 +1068,7 @@ document.getElementById('btn-copy-file').onclick = async () => {
 
 // ===== DRAG SORT =====
 (function() {
-  const LONG_PRESS_MS = 450;
+  const LONG_PRESS_MS = 200;
   let pressTimer = null;
   let startTouch = null;
 
@@ -1108,6 +1121,39 @@ document.getElementById('btn-copy-file').onclick = async () => {
     siblings.sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || b.updatedAt - a.updatedAt);
     const draggedFile = files.find(f => f.id === fileId);
     if (!draggedFile) return;
+    if (!folderName) {
+      const projectFiles = files.filter(f => f.projectId === currentProjectId);
+      const topItems = buildTree(projectFiles).topItems.filter(item => !(item.type === 'file' && item.file.id === fileId));
+      let topInsertAfterIdx = -1;
+      if (insertAfterEl) {
+        topInsertAfterIdx = topItems.findIndex(item =>
+          (item.type === 'file' && item.file.id === insertAfterEl.dataset.id) ||
+          (item.type === 'folder' && item.name === insertAfterEl.dataset.folderGroup)
+        );
+      }
+      let topNewOrder = calcNewOrder(topItems, topInsertAfterIdx);
+      if (topNewOrder === null) {
+        reindexSortOrder(topItems);
+        topNewOrder = calcNewOrder(topItems, topInsertAfterIdx);
+      }
+      draggedFile.folder = undefined;
+      draggedFile.sortOrder = topNewOrder ?? 0;
+      draggedFile.updatedAt = ts();
+      await dbPut('files', draggedFile);
+      for (const item of topItems) {
+        if (item.sortOrder === undefined) continue;
+        if (item.type === 'file') {
+          item.file.sortOrder = item.sortOrder;
+          await dbPut('files', item.file);
+        } else {
+          const meta = ensureFolderMeta(currentProjectId, item.name);
+          meta.sortOrder = item.sortOrder;
+          await dbPut('folderMeta', meta);
+        }
+      }
+      renderFiles();
+      return;
+    }
     // 从 siblings 中移除被拖拽项，确定插入位置
     const withoutDragged = siblings.filter(f => f.id !== fileId);
     let insertAfterIdx = -1;
@@ -1138,30 +1184,38 @@ document.getElementById('btn-copy-file').onclick = async () => {
     // 确保每个目录都有 meta
     for (const name of allFolderNames) {
       if (!folderMetas.find(m => m.projectId === currentProjectId && m.name === name)) {
-        const meta = { key: `${currentProjectId}::${name}`, projectId: currentProjectId, name, sortOrder: 9999, collapsed: false };
-        folderMetas.push(meta);
+        const meta = ensureFolderMeta(currentProjectId, name);
         await dbPut('folderMeta', meta);
       }
     }
-    const metas = folderMetas.filter(m => m.projectId === currentProjectId);
-    metas.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'zh'));
-    const draggedMeta = metas.find(m => m.name === folderName);
+    const projectFiles = files.filter(f => f.projectId === currentProjectId);
+    const topItems = buildTree(projectFiles).topItems.filter(item => !(item.type === 'folder' && item.name === folderName));
+    const draggedMeta = ensureFolderMeta(currentProjectId, folderName);
     if (!draggedMeta) return;
-    const withoutDragged = metas.filter(m => m.name !== folderName);
     let insertAfterIdx = -1;
     if (insertAfterEl) {
-      const afterName = insertAfterEl.dataset.folderGroup;
-      insertAfterIdx = withoutDragged.findIndex(m => m.name === afterName);
+      insertAfterIdx = topItems.findIndex(item =>
+        (item.type === 'file' && item.file.id === insertAfterEl.dataset.id) ||
+        (item.type === 'folder' && item.name === insertAfterEl.dataset.folderGroup)
+      );
     }
-    let newOrder = calcNewOrder(withoutDragged, insertAfterIdx);
+    let newOrder = calcNewOrder(topItems, insertAfterIdx);
     if (newOrder === null) {
-      reindexSortOrder(withoutDragged);
-      newOrder = calcNewOrder(withoutDragged, insertAfterIdx);
+      reindexSortOrder(topItems);
+      newOrder = calcNewOrder(topItems, insertAfterIdx);
     }
     draggedMeta.sortOrder = newOrder ?? 0;
     await dbPut('folderMeta', draggedMeta);
-    for (const m of withoutDragged) {
-      if (m.sortOrder !== undefined) await dbPut('folderMeta', m);
+    for (const item of topItems) {
+      if (item.sortOrder === undefined) continue;
+      if (item.type === 'file') {
+        item.file.sortOrder = item.sortOrder;
+        await dbPut('files', item.file);
+      } else {
+        const meta = ensureFolderMeta(currentProjectId, item.name);
+        meta.sortOrder = item.sortOrder;
+        await dbPut('folderMeta', meta);
+      }
     }
     renderFiles();
   }
@@ -1205,9 +1259,13 @@ document.getElementById('btn-copy-file').onclick = async () => {
     // 找插入位置
     removeDropIndicator();
     const listEl = getFileListEl();
+    const draggedFile = dragState.isFile ? files.find(x => x.id === dragState.id) : null;
+    const folderListEl = dragState.sourceEl.closest('.folder-children');
     const items = dragState.isFile
-      ? [...listEl.querySelectorAll(`.file-item:not(.dragging)`)]
-      : [...listEl.querySelectorAll(`.folder-group:not(.dragging)`)];
+      ? (draggedFile?.folder
+        ? [...(folderListEl || listEl).querySelectorAll(`.file-item:not(.dragging)`)]
+        : [...listEl.querySelectorAll(`#file-list > .folder-group:not(.dragging), #file-list > .file-item:not(.dragging)`)])
+      : [...listEl.querySelectorAll(`#file-list > .folder-group:not(.dragging), #file-list > .file-item:not(.dragging)`)];
 
     let insertAfterEl = null;
     let insertBeforeEl = null;
@@ -1231,7 +1289,7 @@ document.getElementById('btn-copy-file').onclick = async () => {
     } else if (insertBeforeEl) {
       insertBeforeEl.before(indicator);
     } else if (items.length === 0) {
-      listEl.appendChild(indicator);
+      (folderListEl || listEl).appendChild(indicator);
     }
   }, { passive: false });
 
@@ -1276,6 +1334,20 @@ function buildAssembledText(customPrompt) {
   return parts.join('\n\n');
 }
 
+function estimateTokenCount(text) {
+  const cjkCount = (text.match(/[\u3400-\u9fff]/g) || []).length;
+  const nonCjkText = text.replace(/[\u3400-\u9fff]/g, ' ');
+  const nonCjkUnits = (nonCjkText.match(/[A-Za-z0-9_]+|[^\sA-Za-z0-9_]/g) || []).length;
+  return Math.ceil(cjkCount + nonCjkUnits * 0.75);
+}
+
+function updateAssemblePreview() {
+  const text = buildAssembledText(document.getElementById('assemble-prompt').value);
+  document.getElementById('assemble-preview').textContent = text;
+  document.getElementById('assemble-stats').textContent =
+    `上下文 ${Array.from(text).length.toLocaleString()} 字 · 约 ${estimateTokenCount(text).toLocaleString()} tokens`;
+}
+
 function renderAssembleFileList() {
   const el = document.getElementById('assemble-files-list');
   el.innerHTML = selectedFileIds.map((id, i) => {
@@ -1291,14 +1363,12 @@ function renderAssembleFileList() {
 
 function openAssemble() {
   renderAssembleFileList();
-  const prompt = document.getElementById('assemble-prompt').value;
-  document.getElementById('assemble-preview').textContent = buildAssembledText(prompt);
+  updateAssemblePreview();
   document.getElementById('overlay-assemble').classList.add('active');
 }
 
 document.getElementById('assemble-prompt').addEventListener('input', () => {
-  const prompt = document.getElementById('assemble-prompt').value;
-  document.getElementById('assemble-preview').textContent = buildAssembledText(prompt);
+  updateAssemblePreview();
 });
 
 document.getElementById('assemble-files-list').addEventListener('click', e => {
@@ -1312,7 +1382,7 @@ document.getElementById('assemble-files-list').addEventListener('click', e => {
     if (i < selectedFileIds.length - 1) { [selectedFileIds[i], selectedFileIds[i+1]] = [selectedFileIds[i+1], selectedFileIds[i]]; }
   } else { return; }
   renderAssembleFileList();
-  document.getElementById('assemble-preview').textContent = buildAssembledText(document.getElementById('assemble-prompt').value);
+  updateAssemblePreview();
 });
 
 document.getElementById('btn-close-assemble').onclick = () => document.getElementById('overlay-assemble').classList.remove('active');
