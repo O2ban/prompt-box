@@ -333,7 +333,7 @@ input, textarea { font-family: inherit; font-size: 15px; }
 .file-item.in-folder { border-radius: 8px; margin-bottom: 4px; }
 .drag-handle {
   width: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); touch-action: none; cursor: grab; opacity: 0.5;
+  color: var(--text-3); touch-action: pan-y; cursor: grab; opacity: 0.5;
 }
 .drag-handle:active { cursor: grabbing; }
 .drag-handle svg { width: 14px; height: 14px; }
@@ -1048,7 +1048,7 @@ document.getElementById('btn-copy-file').onclick = async () => {
 
 // ===== DRAG SORT =====
 (function() {
-  const LONG_PRESS_MS = 200;
+  const LONG_PRESS_MS = 450;
   let pressTimer = null;
   let startTouch = null;
 
