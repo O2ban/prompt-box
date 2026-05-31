@@ -155,7 +155,7 @@ input, textarea { font-family: inherit; font-size: 15px; }
 }
 .fullscreen.active { display: flex; }
 .editor-header {
-  height: var(--header-h); background: var(--bg-card);
+  min-height: var(--header-h); background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; padding: 0 12px; gap: 8px;
 }
@@ -310,6 +310,38 @@ input, textarea { font-family: inherit; font-size: 15px; }
 /* Streaming cursor */
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 .cursor { display: inline-block; width: 2px; height: 14px; background: var(--text); animation: blink 1s infinite; vertical-align: middle; margin-left: 2px; }
+
+/* Folder tree */
+.folder-group { margin-bottom: 6px; }
+.folder-header {
+  display: flex; align-items: center; gap: 8px; padding: 9px 14px;
+  background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border);
+  cursor: pointer; user-select: none;
+}
+.folder-header:active { background: var(--primary-light); }
+.folder-arrow { flex-shrink: 0; transition: transform 0.2s; color: var(--text-3); }
+.folder-arrow.collapsed { transform: rotate(-90deg); }
+.folder-label { flex: 1; font-size: 14px; font-weight: 600; color: var(--text); }
+.folder-count { font-size: 12px; color: var(--text-3); }
+.folder-children { margin-left: 14px; padding-left: 10px; border-left: 2px solid var(--border); margin-top: 4px; }
+.folder-children.hidden { display: none; }
+.file-item.in-folder { border-radius: 8px; margin-bottom: 4px; }
+.drag-handle {
+  width: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--text-3); touch-action: none; cursor: grab; opacity: 0.5;
+}
+.drag-handle:active { cursor: grabbing; }
+.drag-handle svg { width: 14px; height: 14px; }
+.file-item.dragging, .folder-group.dragging { opacity: 0.3; }
+.drag-ghost {
+  position: fixed; pointer-events: none; z-index: 500; opacity: 0.9;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15); border-radius: var(--radius);
+  background: var(--bg-card); border: 1px solid var(--primary);
+}
+.drop-indicator {
+  height: 2px; background: var(--primary); border-radius: 2px;
+  margin: 1px 0; pointer-events: none;
+}
 
 /* Project list */
 #overlay-project { z-index: 250; }
@@ -574,7 +606,17 @@ input, textarea { font-family: inherit; font-size: 15px; }
       <button class="icon-btn" id="btn-editor-back">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <input class="editor-title-input" id="editor-title" placeholder="文件名">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0">
+        <input class="editor-title-input" id="editor-title" placeholder="文件名（可含 / 指定目录）">
+        <div id="editor-folder-row" style="display:flex;align-items:center;gap:4px;padding:2px 0 4px;border-top:1px solid var(--border)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" style="color:var(--text-3);flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <select id="editor-folder-select" style="font-size:12px;border:none;background:transparent;color:var(--primary);outline:none;flex:1;min-width:0">
+            <option value="">根目录</option>
+          </select>
+          <input id="editor-folder-new" class="form-input" placeholder="新目录名" style="display:none;font-size:12px;padding:2px 6px;height:24px;flex:1">
+          <button id="btn-folder-new-toggle" style="font-size:11px;color:var(--primary);padding:2px 6px;border-radius:4px;background:var(--primary-light);border:none;flex-shrink:0">+ 新建</button>
+        </div>
+      </div>
       <button class="icon-btn" id="btn-copy-file" title="复制内容">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
       </button>
@@ -615,7 +657,7 @@ input, textarea { font-family: inherit; font-size: 15px; }
 </div>
 <script>
 // ===== DB =====
-const DB_NAME = 'promptbox', DB_VER = 2;
+const DB_NAME = 'promptbox', DB_VER = 3;
 let db;
 function openDB() {
   return new Promise((res, rej) => {
@@ -626,6 +668,7 @@ function openDB() {
       if (!d.objectStoreNames.contains('conversations')) d.createObjectStore('conversations', {keyPath:'id'});
       if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', {keyPath:'key'});
       if (!d.objectStoreNames.contains('projects')) d.createObjectStore('projects', {keyPath:'id'});
+      if (!d.objectStoreNames.contains('folderMeta')) d.createObjectStore('folderMeta', {keyPath:'key'});
     };
     req.onsuccess = e => { db = e.target.result; res(db); };
     req.onerror = e => rej(e);
@@ -672,7 +715,7 @@ function fmtDate(t) {
 }
 
 // ===== STATE =====
-let files = [], providers = [], conversations = [], settings = {}, projects = [];
+let files = [], providers = [], conversations = [], settings = {}, projects = [], folderMetas = [];
 let currentProjectId = null;
 let currentConvId = null;
 let selectedFileIds = []; // 有序数组，维护拼装顺序
@@ -684,6 +727,7 @@ let isStreaming = false;
 let abortController = null;
 let tempModelTags = [];
 let editingModelIndex = -1;
+let dragState = null;
 
 // ===== LOAD =====
 async function loadAll() {
@@ -712,6 +756,7 @@ async function loadAll() {
 
   files = allFiles.sort((a,b) => b.updatedAt - a.updatedAt);
   conversations = allConvs.sort((a,b) => b.updatedAt - a.updatedAt);
+  folderMetas = await dbGetAll('folderMeta');
   const s = await dbGet('settings', 'main');
   settings = s ? s.data : { providers: [], currentProviderId: null, currentModelId: null };
   providers = settings.providers || [];
@@ -760,30 +805,83 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // ===== FILES =====
+function getFolderMeta(projectId, folderName) {
+  return folderMetas.find(m => m.projectId === projectId && m.name === folderName);
+}
+
+function buildTree(projectFiles) {
+  const folderMap = new Map();
+  const rootFiles = [];
+  for (const f of projectFiles) {
+    if (f.folder) {
+      if (!folderMap.has(f.folder)) folderMap.set(f.folder, []);
+      folderMap.get(f.folder).push(f);
+    } else {
+      rootFiles.push(f);
+    }
+  }
+  for (const arr of folderMap.values()) {
+    arr.sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || b.updatedAt - a.updatedAt);
+  }
+  rootFiles.sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || b.updatedAt - a.updatedAt);
+  const folders = [...folderMap.entries()].map(([name, fls]) => {
+    const meta = getFolderMeta(currentProjectId, name);
+    return { name, files: fls, sortOrder: meta?.sortOrder ?? 9999, collapsed: meta?.collapsed ?? false };
+  });
+  folders.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'zh'));
+  return { folders, rootFiles };
+}
+
+const DRAG_HANDLE_SVG = `<svg viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/><circle cx="3" cy="8" r="1.2"/><circle cx="7" cy="8" r="1.2"/><circle cx="3" cy="13" r="1.2"/><circle cx="7" cy="13" r="1.2"/></svg>`;
+
+function renderFileItem(f, inFolder) {
+  const checked = selectedFileIds.includes(f.id);
+  return `<div class="file-item ${checked ? 'checked' : ''} ${inFolder ? 'in-folder' : ''}" data-id="${f.id}">
+    <span class="drag-handle" data-drag-file="${f.id}">${DRAG_HANDLE_SVG}</span>
+    <div class="file-check" data-check="${f.id}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div style="flex:1;min-width:0" data-edit="${f.id}">
+      <div class="file-name">${esc(f.name)}</div>
+      <div class="file-meta">${f.content.length} 字 · ${fmtDate(f.updatedAt)}</div>
+    </div>
+    <div class="file-actions">
+      <button class="icon-btn" data-copy-file="${f.id}" title="复制内容">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </button>
+      <button class="icon-btn" data-del-file="${f.id}" title="删除" style="color:var(--danger)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
+
+function renderFolderGroup(folder) {
+  const collapsed = folder.collapsed;
+  return `<div class="folder-group" data-folder-group="${esc(folder.name)}">
+    <div class="folder-header" data-toggle-folder="${esc(folder.name)}">
+      <span class="drag-handle" data-drag-folder="${esc(folder.name)}">${DRAG_HANDLE_SVG}</span>
+      <svg class="folder-arrow ${collapsed ? 'collapsed' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--primary);flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="folder-label">${esc(folder.name)}</span>
+      <span class="folder-count">${folder.files.length}</span>
+    </div>
+    <div class="folder-children ${collapsed ? 'hidden' : ''}" data-folder-children="${esc(folder.name)}">
+      ${folder.files.map(f => renderFileItem(f, true)).join('')}
+    </div>
+  </div>`;
+}
+
 function renderFiles() {
   const el = document.getElementById('file-list');
   const projectFiles = files.filter(f => f.projectId === currentProjectId);
   if (!projectFiles.length) {
     el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>还没有文件，点右上角 + 新建</p></div>`;
   } else {
-    el.innerHTML = projectFiles.map(f => `
-      <div class="file-item ${selectedFileIds.includes(f.id) ? 'checked' : ''}" data-id="${f.id}">
-        <div class="file-check" data-check="${f.id}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-        <div style="flex:1;min-width:0" data-edit="${f.id}">
-          <div class="file-name">${esc(f.name)}</div>
-          <div class="file-meta">${f.content.length} 字 · ${fmtDate(f.updatedAt)}</div>
-        </div>
-        <div class="file-actions">
-          <button class="icon-btn" data-copy-file="${f.id}" title="复制内容">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          </button>
-          <button class="icon-btn" data-del-file="${f.id}" title="删除" style="color:var(--danger)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-          </button>
-        </div>
-      </div>`).join('');
+    const { folders, rootFiles } = buildTree(projectFiles);
+    let html = folders.map(renderFolderGroup).join('');
+    html += rootFiles.map(f => renderFileItem(f, false)).join('');
+    el.innerHTML = html;
   }
   updateAssembleBar();
 }
@@ -800,10 +898,12 @@ function updateAssembleBar() {
 }
 
 document.getElementById('file-list').addEventListener('click', async e => {
+  if (dragState) return; // 拖拽中忽略点击
   const checkId = e.target.closest('[data-check]')?.dataset.check;
   const editId = e.target.closest('[data-edit]')?.dataset.edit;
   const copyId = e.target.closest('[data-copy-file]')?.dataset.copyFile;
   const delId = e.target.closest('[data-del-file]')?.dataset.delFile;
+  const toggleFolder = e.target.closest('[data-toggle-folder]')?.dataset.toggleFolder;
 
   if (checkId) {
     if (selectedFileIds.includes(checkId)) {
@@ -811,7 +911,10 @@ document.getElementById('file-list').addEventListener('click', async e => {
     } else {
       selectedFileIds.push(checkId);
     }
-    renderFiles();
+    // 只更新勾选样式，不重渲染整个列表
+    const itemEl = document.querySelector(`.file-item[data-id="${checkId}"]`);
+    if (itemEl) itemEl.classList.toggle('checked', selectedFileIds.includes(checkId));
+    updateAssembleBar();
   } else if (editId) {
     openEditor(editId);
   } else if (copyId) {
@@ -828,8 +931,28 @@ document.getElementById('file-list').addEventListener('click', async e => {
       renderFiles();
       toast('已删除');
     }
+  } else if (toggleFolder !== undefined) {
+    // 不要让拖拽手柄触发折叠
+    if (e.target.closest('[data-drag-folder]')) return;
+    await toggleFolderCollapse(toggleFolder);
   }
 });
+
+async function toggleFolderCollapse(folderName) {
+  const key = `${currentProjectId}::${folderName}`;
+  let meta = folderMetas.find(m => m.key === key);
+  if (!meta) {
+    meta = { key, projectId: currentProjectId, name: folderName, sortOrder: 9999, collapsed: false };
+    folderMetas.push(meta);
+  }
+  meta.collapsed = !meta.collapsed;
+  await dbPut('folderMeta', meta);
+  // 只切换 DOM，不重渲染
+  const childrenEl = document.querySelector(`[data-folder-children="${CSS.escape(folderName)}"]`);
+  const arrowEl = document.querySelector(`[data-folder-group="${CSS.escape(folderName)}"] .folder-arrow`);
+  if (childrenEl) childrenEl.classList.toggle('hidden', meta.collapsed);
+  if (arrowEl) arrowEl.classList.toggle('collapsed', meta.collapsed);
+}
 
 document.getElementById('btn-new-file').onclick = () => openEditor(null);
 
@@ -838,6 +961,17 @@ function openEditor(fileId) {
   const f = fileId ? files.find(x => x.id === fileId) : null;
   document.getElementById('editor-title').value = f ? f.name : '';
   document.getElementById('editor-content').value = f ? f.content : '';
+  // 填充目录下拉
+  const sel = document.getElementById('editor-folder-select');
+  const existingFolders = [...new Set(
+    files.filter(x => x.projectId === currentProjectId && x.folder).map(x => x.folder)
+  )].sort((a, b) => a.localeCompare(b, 'zh'));
+  sel.innerHTML = '<option value="">根目录</option>' +
+    existingFolders.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  sel.value = f?.folder || '';
+  document.getElementById('editor-folder-new').style.display = 'none';
+  document.getElementById('editor-folder-new').value = '';
+  document.getElementById('btn-folder-new-toggle').textContent = '+ 新建';
   document.getElementById('editor-screen').classList.add('active');
   setTimeout(() => {
     if (!f) document.getElementById('editor-title').focus();
@@ -845,18 +979,54 @@ function openEditor(fileId) {
   }, 100);
 }
 
+// 新建目录切换
+document.getElementById('btn-folder-new-toggle').onclick = () => {
+  const newInput = document.getElementById('editor-folder-new');
+  const sel = document.getElementById('editor-folder-select');
+  const btn = document.getElementById('btn-folder-new-toggle');
+  if (newInput.style.display === 'none') {
+    newInput.style.display = '';
+    sel.style.display = 'none';
+    btn.textContent = '取消';
+    newInput.focus();
+  } else {
+    newInput.style.display = 'none';
+    sel.style.display = '';
+    btn.textContent = '+ 新建';
+  }
+};
+
 document.getElementById('btn-editor-back').onclick = saveAndCloseEditor;
 document.getElementById('editor-title').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('editor-content').focus(); });
 
 async function saveAndCloseEditor() {
-  const name = document.getElementById('editor-title').value.trim() || '未命名文件';
+  let name = document.getElementById('editor-title').value.trim() || '未命名文件';
   const content = document.getElementById('editor-content').value;
+  const newFolderInput = document.getElementById('editor-folder-new');
+  let folder;
+  if (newFolderInput.style.display !== 'none' && newFolderInput.value.trim()) {
+    folder = newFolderInput.value.trim();
+  } else {
+    folder = document.getElementById('editor-folder-select').value;
+  }
+  // 文件名含 / 时优先解析
+  if (name.includes('/')) {
+    const idx = name.lastIndexOf('/');
+    folder = name.slice(0, idx).trim() || folder;
+    name = name.slice(idx + 1).trim() || '未命名文件';
+  }
   if (editingFileId) {
     const f = files.find(x => x.id === editingFileId);
-    if (f) { f.name = name; f.content = content; f.updatedAt = ts(); await dbPut('files', f); }
+    if (f) {
+      f.name = name;
+      f.folder = folder || undefined;
+      f.content = content;
+      f.updatedAt = ts();
+      await dbPut('files', f);
+    }
   } else {
     if (content.trim() || name !== '未命名文件') {
-      const f = { id: uuid(), name, content, projectId: currentProjectId, createdAt: ts(), updatedAt: ts() };
+      const f = { id: uuid(), name, folder: folder || undefined, content, projectId: currentProjectId, createdAt: ts(), updatedAt: ts() };
       files.unshift(f);
       await dbPut('files', f);
     }
@@ -870,6 +1040,209 @@ document.getElementById('btn-copy-file').onclick = async () => {
   await copyText(content);
   toast('已复制');
 };
+
+// ===== DRAG SORT =====
+(function() {
+  const LONG_PRESS_MS = 200;
+  let pressTimer = null;
+  let startTouch = null;
+
+  function getFileListEl() { return document.getElementById('file-list'); }
+
+  function createGhost(sourceEl) {
+    const rect = sourceEl.getBoundingClientRect();
+    const ghost = sourceEl.cloneNode(true);
+    ghost.className = 'drag-ghost';
+    ghost.style.width = rect.width + 'px';
+    ghost.style.top = rect.top + 'px';
+    ghost.style.left = rect.left + 'px';
+    document.body.appendChild(ghost);
+    return ghost;
+  }
+
+  function moveGhost(ghost, dy) {
+    const top = parseFloat(ghost.style.top) + dy;
+    ghost.style.top = top + 'px';
+  }
+
+  function removeDropIndicator() {
+    document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+  }
+
+  // 重新计算 sortOrder：取前后平均值，精度不足时全量重排
+  function calcNewOrder(siblings, insertAfterIdx) {
+    const prev = insertAfterIdx >= 0 ? siblings[insertAfterIdx] : null;
+    const next = insertAfterIdx + 1 < siblings.length ? siblings[insertAfterIdx + 1] : null;
+    const prevOrder = prev ? (prev.sortOrder ?? 0) : (next ? (next.sortOrder ?? 0) - 2000 : 0);
+    const nextOrder = next ? (next.sortOrder ?? 0) : prevOrder + 2000;
+    const newOrder = (prevOrder + nextOrder) / 2;
+    // 精度不足时触发全量重排
+    if (Math.abs(nextOrder - prevOrder) < 1) return null;
+    return newOrder;
+  }
+
+  function reindexSortOrder(items) {
+    items.forEach((item, i) => { item.sortOrder = i * 1000; });
+  }
+
+  // ---- 文件拖拽 ----
+  async function endFileDrag(fileId, folderName, insertAfterEl) {
+    const siblings = files.filter(f => f.projectId === currentProjectId && (f.folder || '') === (folderName || ''));
+    siblings.sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || b.updatedAt - a.updatedAt);
+    const draggedFile = files.find(f => f.id === fileId);
+    if (!draggedFile) return;
+    // 从 siblings 中移除被拖拽项，确定插入位置
+    const withoutDragged = siblings.filter(f => f.id !== fileId);
+    let insertAfterIdx = -1;
+    if (insertAfterEl) {
+      const afterId = insertAfterEl.dataset.id;
+      insertAfterIdx = withoutDragged.findIndex(f => f.id === afterId);
+    }
+    let newOrder = calcNewOrder(withoutDragged, insertAfterIdx);
+    if (newOrder === null) {
+      reindexSortOrder(withoutDragged);
+      newOrder = calcNewOrder(withoutDragged, insertAfterIdx);
+    }
+    draggedFile.sortOrder = newOrder ?? 0;
+    draggedFile.updatedAt = ts();
+    await dbPut('files', draggedFile);
+    // 如果全量重排了，批量保存
+    for (const f of withoutDragged) {
+      if (f.sortOrder !== undefined) await dbPut('files', f);
+    }
+    renderFiles();
+  }
+
+  // ---- 目录拖拽 ----
+  async function endFolderDrag(folderName, insertAfterEl) {
+    const projectFolderMetas = folderMetas.filter(m => m.projectId === currentProjectId);
+    // 获取当前所有目录（包括没有 meta 的）
+    const allFolderNames = [...new Set(files.filter(f => f.projectId === currentProjectId && f.folder).map(f => f.folder))];
+    // 确保每个目录都有 meta
+    for (const name of allFolderNames) {
+      if (!folderMetas.find(m => m.projectId === currentProjectId && m.name === name)) {
+        const meta = { key: `${currentProjectId}::${name}`, projectId: currentProjectId, name, sortOrder: 9999, collapsed: false };
+        folderMetas.push(meta);
+        await dbPut('folderMeta', meta);
+      }
+    }
+    const metas = folderMetas.filter(m => m.projectId === currentProjectId);
+    metas.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'zh'));
+    const draggedMeta = metas.find(m => m.name === folderName);
+    if (!draggedMeta) return;
+    const withoutDragged = metas.filter(m => m.name !== folderName);
+    let insertAfterIdx = -1;
+    if (insertAfterEl) {
+      const afterName = insertAfterEl.dataset.folderGroup;
+      insertAfterIdx = withoutDragged.findIndex(m => m.name === afterName);
+    }
+    let newOrder = calcNewOrder(withoutDragged, insertAfterIdx);
+    if (newOrder === null) {
+      reindexSortOrder(withoutDragged);
+      newOrder = calcNewOrder(withoutDragged, insertAfterIdx);
+    }
+    draggedMeta.sortOrder = newOrder ?? 0;
+    await dbPut('folderMeta', draggedMeta);
+    for (const m of withoutDragged) {
+      if (m.sortOrder !== undefined) await dbPut('folderMeta', m);
+    }
+    renderFiles();
+  }
+
+  // ---- Touch 事件 ----
+  getFileListEl().addEventListener('touchstart', e => {
+    const handle = e.target.closest('[data-drag-file],[data-drag-folder]');
+    if (!handle) return;
+    startTouch = e.touches[0];
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      const isFile = handle.hasAttribute('data-drag-file');
+      const id = isFile ? handle.dataset.dragFile : handle.dataset.dragFolder;
+      const sourceEl = isFile
+        ? handle.closest('.file-item')
+        : handle.closest('.folder-group');
+      if (!sourceEl) return;
+      sourceEl.classList.add('dragging');
+      const ghost = createGhost(sourceEl);
+      dragState = { isFile, id, ghost, sourceEl, lastY: startTouch.clientY, insertAfterEl: null };
+    }, LONG_PRESS_MS);
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    if (pressTimer !== null) {
+      // 手指移动超过阈值则取消长按
+      const dx = Math.abs(e.touches[0].clientX - startTouch.clientX);
+      const dy = Math.abs(e.touches[0].clientY - startTouch.clientY);
+      if (dx > 8 || dy > 8) { clearTimeout(pressTimer); pressTimer = null; }
+      return;
+    }
+    if (!dragState) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const dy = touch.clientY - dragState.lastY;
+    dragState.lastY = touch.clientY;
+    moveGhost(dragState.ghost, dy);
+
+    // 找插入位置
+    removeDropIndicator();
+    const listEl = getFileListEl();
+    const items = dragState.isFile
+      ? [...listEl.querySelectorAll(`.file-item:not(.dragging)`)]
+      : [...listEl.querySelectorAll(`.folder-group:not(.dragging)`)];
+
+    let insertAfterEl = null;
+    let insertBeforeEl = null;
+    for (const item of items) {
+      const rect = item.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (touch.clientY > mid) {
+        insertAfterEl = item;
+      } else if (!insertBeforeEl) {
+        insertBeforeEl = item;
+        break;
+      }
+    }
+    dragState.insertAfterEl = insertAfterEl;
+
+    // 显示插入指示线
+    const indicator = document.createElement('div');
+    indicator.className = 'drop-indicator';
+    if (insertAfterEl) {
+      insertAfterEl.after(indicator);
+    } else if (insertBeforeEl) {
+      insertBeforeEl.before(indicator);
+    } else if (items.length === 0) {
+      listEl.appendChild(indicator);
+    }
+  }, { passive: false });
+
+  document.addEventListener('touchend', async e => {
+    clearTimeout(pressTimer);
+    pressTimer = null;
+    if (!dragState) return;
+    const { isFile, id, ghost, sourceEl, insertAfterEl } = dragState;
+    dragState = null;
+    ghost.remove();
+    sourceEl.classList.remove('dragging');
+    removeDropIndicator();
+    if (isFile) {
+      const f = files.find(x => x.id === id);
+      await endFileDrag(id, f?.folder || '', insertAfterEl);
+    } else {
+      await endFolderDrag(id, insertAfterEl);
+    }
+  });
+
+  document.addEventListener('touchcancel', () => {
+    clearTimeout(pressTimer);
+    pressTimer = null;
+    if (!dragState) return;
+    dragState.ghost.remove();
+    dragState.sourceEl.classList.remove('dragging');
+    removeDropIndicator();
+    dragState = null;
+  });
+})();
 
 // ===== ASSEMBLE =====
 document.getElementById('btn-assemble').onclick = openAssemble;
