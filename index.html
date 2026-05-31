@@ -65,6 +65,11 @@ input, textarea { font-family: inherit; font-size: 15px; }
 
 /* Scrollable list area */
 .list-area { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px; }
+#file-list, #file-list * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
 
 /* Cards */
 .card {
@@ -1049,6 +1054,11 @@ document.getElementById('btn-copy-file').onclick = async () => {
 
   function getFileListEl() { return document.getElementById('file-list'); }
 
+  function clearTextSelection() {
+    const selection = window.getSelection?.();
+    if (selection && !selection.isCollapsed) selection.removeAllRanges();
+  }
+
   function createGhost(sourceEl) {
     const rect = sourceEl.getBoundingClientRect();
     const ghost = sourceEl.cloneNode(true);
@@ -1153,9 +1163,11 @@ document.getElementById('btn-copy-file').onclick = async () => {
   getFileListEl().addEventListener('touchstart', e => {
     const handle = e.target.closest('[data-drag-file],[data-drag-folder]');
     if (!handle) return;
+    clearTextSelection();
     startTouch = e.touches[0];
     pressTimer = setTimeout(() => {
       pressTimer = null;
+      clearTextSelection();
       const isFile = handle.hasAttribute('data-drag-file');
       const id = isFile ? handle.dataset.dragFile : handle.dataset.dragFolder;
       const sourceEl = isFile
