@@ -1,0 +1,2592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="PromptBox">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#1a6abf">
+<title>PromptBox</title>
+<style>
+:root {
+  --primary: #1a6abf;
+  --primary-light: #e8f0fb;
+  --primary-dark: #1456a0;
+  --bg: #f5f6f8;
+  --bg-card: #ffffff;
+  --text: #1a1a2e;
+  --text-2: #555;
+  --text-3: #999;
+  --border: #e4e6eb;
+  --danger: #e24b4a;
+  --success: #1d9e75;
+  --radius: 10px;
+  --tab-h: 56px;
+  --header-h: 52px;
+}
+[data-theme="dark"] {
+  --primary: #4a9eff;
+  --primary-light: #1e2f4a;
+  --primary-dark: #2d7dd6;
+  --bg: #121319;
+  --bg-card: #1c1d26;
+  --text: #e8e8ee;
+  --text-2: #aaa;
+  --text-3: #777;
+  --border: #2a2b36;
+  --danger: #ff6b6b;
+  --success: #4ade80;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --primary: #4a9eff;
+    --primary-light: #1e2f4a;
+    --primary-dark: #2d7dd6;
+    --bg: #121319;
+    --bg-card: #1c1d26;
+    --text: #e8e8ee;
+    --text-2: #aaa;
+    --text-3: #777;
+    --border: #2a2b36;
+    --danger: #ff6b6b;
+    --success: #4ade80;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none;
+  background: var(--bg); font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif; font-size: 15px; color: var(--text);
+}
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+input, textarea { font-family: inherit; font-size: 15px; }
+
+/* Layout */
+#app { display: flex; flex-direction: column; height: 100%; height: 100dvh; min-height: 0; overflow: hidden; }
+.tab-content { flex: 1; min-height: 0; overflow: hidden; display: none; flex-direction: column; position: relative; }
+.tab-content.active { display: flex; }
+
+/* Header */
+.header {
+  height: var(--header-h); min-height: var(--header-h);
+  background: var(--bg-card); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 16px; gap: 10px;
+  position: relative;
+}
+.header h1 { font-size: 17px; font-weight: 600; flex: 1; }
+.header-btn {
+  width: 36px; height: 36px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--primary); font-size: 22px; font-weight: 300;
+}
+.header-btn:active { background: var(--primary-light); }
+
+/* Bottom tabs */
+.tabs {
+  height: var(--tab-h); min-height: var(--tab-h);
+  background: var(--bg-card); border-top: 1px solid var(--border);
+  display: flex;
+}
+.tab-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; color: var(--text-3); font-size: 11px;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.tab-btn svg { width: 22px; height: 22px; }
+.tab-btn.active { color: var(--primary); }
+
+/* Scrollable list area */
+.list-area {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 12px;
+}
+#file-list, #file-list * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Cards */
+.card {
+  background: var(--bg-card); border-radius: var(--radius);
+  border: 1px solid var(--border); margin-bottom: 8px;
+}
+.card-row {
+  display: flex; align-items: center; padding: 12px 14px; gap: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.card-row:last-child { border-bottom: none; }
+
+/* File item */
+.file-item {
+  display: flex; align-items: center; padding: 12px 14px; gap: 12px;
+  background: var(--bg-card); border-radius: var(--radius);
+  border: 1px solid var(--border); margin-bottom: 8px;
+}
+.file-item.checked { border-color: var(--primary); background: var(--primary-light); }
+.file-check {
+  width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  transition: all 0.15s;
+}
+.file-item.checked .file-check { background: var(--primary); border-color: var(--primary); }
+.file-check svg { display: none; }
+.file-item.checked .file-check svg { display: block; }
+.file-name { flex: 1; font-size: 15px; font-weight: 500; }
+.file-meta { font-size: 12px; color: var(--text-3); }
+.file-actions { display: flex; gap: 4px; }
+.icon-btn {
+  width: 32px; height: 32px; border-radius: 6px; display: flex;
+  align-items: center; justify-content: center; color: var(--text-2);
+}
+.icon-btn:active { background: var(--bg); }
+.icon-btn svg { width: 18px; height: 18px; }
+
+/* Assemble bar */
+.assemble-bar {
+  background: var(--bg-card); border-top: 1px solid var(--border);
+  padding: 10px 16px; display: flex; align-items: center; gap: 10px;
+}
+.assemble-bar.hidden { display: none; }
+.assemble-count { font-size: 13px; color: var(--text-2); flex: 1; }
+.btn-primary {
+  background: var(--primary); color: #fff; border-radius: 8px;
+  padding: 9px 18px; font-size: 14px; font-weight: 500;
+}
+.btn-primary:active { background: var(--primary-dark); }
+.btn-secondary {
+  background: var(--bg); color: var(--text); border-radius: 8px;
+  padding: 9px 18px; font-size: 14px; border: 1px solid var(--border);
+}
+.btn-secondary:active { background: var(--border); }
+.btn-danger {
+  background: var(--danger); color: #fff; border-radius: 8px;
+  padding: 9px 18px; font-size: 14px; font-weight: 500;
+}
+
+/* Modal / Sheet */
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  z-index: 100; display: none; align-items: flex-end;
+}
+.overlay.active { display: flex; }
+.sheet {
+  background: var(--bg-card); border-radius: 16px 16px 0 0;
+  width: 100%; max-height: 90vh; display: flex; flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.sheet-header {
+  display: flex; align-items: center; padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sheet-title { font-size: 16px; font-weight: 600; flex: 1; }
+.sheet-close {
+  width: 30px; height: 30px; border-radius: 50%; background: var(--bg);
+  display: flex; align-items: center; justify-content: center; color: var(--text-2);
+  font-size: 18px;
+}
+.sheet-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 14px 16px; }
+.sheet-footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 10px; }
+
+/* Full screen editor */
+.fullscreen {
+  position: fixed; inset: 0; background: var(--bg-card);
+  z-index: 200; display: none; flex-direction: column;
+}
+.fullscreen.active { display: flex; }
+.editor-header {
+  min-height: var(--header-h); background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 12px; gap: 8px;
+}
+.editor-title-input {
+  flex: 1; border: none; outline: none; font-size: 16px; font-weight: 600;
+  background: transparent; color: var(--text);
+}
+.editor-textarea {
+  flex: 1; border: none; outline: none; resize: none; padding: 14px 16px;
+  font-size: 15px; line-height: 1.7; color: var(--text); background: var(--bg-card);
+}
+
+/* Chat */
+.chat-model-bar {
+  background: var(--bg-card); border-bottom: 1px solid var(--border);
+  padding: 8px 14px; display: flex; align-items: center; gap: 8px;
+}
+.model-select-btn {
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+  background: var(--bg); border-radius: 8px; border: 1px solid var(--border);
+  font-size: 13px; color: var(--text); flex: 1;
+}
+.chat-messages {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch; touch-action: pan-y;
+  padding: 14px 14px 6px;
+}
+.msg { margin-bottom: 14px; display: flex; flex-direction: column; }
+.msg.user { align-items: flex-end; }
+.msg.assistant { align-items: flex-start; }
+.msg-bubble {
+  max-width: 82%; padding: 10px 13px; border-radius: 14px;
+  font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
+}
+.msg.user .msg-bubble { background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+.msg.assistant .msg-bubble { background: var(--bg-card); border: 1px solid var(--border); border-bottom-left-radius: 4px; white-space: normal; }
+.msg.assistant .msg-bubble pre { white-space: pre; }
+.msg-bubble p { margin: 0 0 8px; }
+.msg-bubble p:last-child { margin-bottom: 0; }
+.msg-bubble ul, .msg-bubble ol { margin: 6px 0 8px; padding-left: 22px; }
+.msg-bubble li { margin: 2px 0; }
+.msg-bubble h1, .msg-bubble h2, .msg-bubble h3, .msg-bubble h4 { margin: 10px 0 6px; font-weight: 600; line-height: 1.3; }
+.msg-bubble h1 { font-size: 18px; }
+.msg-bubble h2 { font-size: 16px; }
+.msg-bubble h3 { font-size: 15px; }
+.msg-bubble h4 { font-size: 14px; }
+.msg-bubble code { background: var(--bg); padding: 1px 5px; border-radius: 4px; font-size: 13px; font-family: "SF Mono", Menlo, Consolas, monospace; }
+.msg-bubble pre { background: var(--bg); padding: 10px 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
+.msg-bubble pre code { background: none; padding: 0; font-size: 13px; line-height: 1.55; }
+.msg-bubble blockquote { border-left: 3px solid var(--border); padding-left: 10px; color: var(--text-2); margin: 8px 0; }
+.msg-bubble a { color: var(--primary); text-decoration: underline; }
+.msg-bubble table { border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+.msg-bubble th, .msg-bubble td { border: 1px solid var(--border); padding: 5px 9px; }
+.msg-bubble th { background: var(--bg); font-weight: 600; }
+.msg-bubble hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+.msg-time { font-size: 11px; color: var(--text-3); }
+.msg-meta {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 4px; padding: 0 4px;
+}
+.msg-copy {
+  font-size: 11px; color: var(--text-3); cursor: pointer; padding: 2px 4px; border-radius: 4px;
+}
+.msg-copy:active { background: var(--bg); }
+.msg-copy.copied { color: var(--primary); }
+.msg-thinking { color: var(--text-3); font-style: italic; }
+.scroll-bottom-btn {
+  position: absolute; right: 14px; bottom: 70px; z-index: 20;
+  width: 38px; height: 38px; border-radius: 50%;
+  display: none; align-items: center; justify-content: center;
+  background: var(--primary); color: #fff; box-shadow: 0 4px 14px rgba(26,106,191,0.25);
+  font-size: 20px; line-height: 1;
+}
+.scroll-bottom-btn.show { display: flex; }
+.scroll-bottom-btn:active { background: var(--primary-dark); }
+.chat-input-area {
+  background: var(--bg-card); border-top: 1px solid var(--border);
+  padding: 10px 12px; display: flex; gap: 8px; align-items: flex-end;
+}
+.chat-input {
+  flex: 1; border: 1px solid var(--border); border-radius: 10px;
+  padding: 9px 12px; font-size: 14px; resize: none; outline: none;
+  max-height: 120px; min-height: 38px; line-height: 1.5; background: var(--bg);
+}
+.send-btn {
+  width: 38px; height: 38px; border-radius: 10px; background: var(--primary);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.send-btn:active { background: var(--primary-dark); }
+.send-btn svg { width: 18px; height: 18px; color: #fff; }
+.send-btn:disabled { background: var(--border); }
+
+/* History list */
+.conv-item {
+  background: var(--bg-card); border-radius: var(--radius);
+  border: 1px solid var(--border); margin-bottom: 8px;
+  padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+}
+.conv-item:active { background: var(--primary-light); }
+.conv-info { flex: 1; min-width: 0; }
+.conv-title { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-meta { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+.conv-del { color: var(--text-3); padding: 4px; }
+
+/* Settings */
+.setting-section { margin-bottom: 20px; }
+.setting-label { font-size: 12px; color: var(--text-3); padding: 0 4px 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+.setting-item {
+  background: var(--bg-card); border: 1px solid var(--border);
+  display: flex; align-items: center; padding: 13px 14px; gap: 10px;
+  margin-bottom: 1px;
+}
+.setting-item:first-of-type { border-radius: var(--radius) var(--radius) 0 0; }
+.setting-item:last-of-type { border-radius: 0 0 var(--radius) var(--radius); margin-bottom: 0; }
+.setting-item:only-of-type { border-radius: var(--radius); }
+.setting-item-label { flex: 1; font-size: 15px; }
+.setting-item-value { font-size: 14px; color: var(--text-3); }
+.setting-item:active { background: var(--primary-light); }
+
+/* Provider editor */
+.form-group { margin-bottom: 14px; }
+.form-label { font-size: 13px; color: var(--text-2); margin-bottom: 5px; display: block; }
+.form-input {
+  width: 100%; border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; font-size: 14px; outline: none; background: var(--bg);
+  color: var(--text);
+}
+.form-input:focus { border-color: var(--primary); background: #fff; }
+
+/* Model tag list */
+.model-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.model-tag {
+  background: var(--primary-light); color: var(--primary);
+  border-radius: 6px; padding: 4px 10px; font-size: 13px;
+  display: flex; align-items: center; gap: 6px;
+}
+.model-tag-del { color: var(--primary); font-size: 16px; line-height: 1; }
+.add-model-row { display: flex; gap: 8px; margin-top: 8px; }
+.add-model-row .form-input { flex: 1; }
+
+/* Assemble preview */
+.preview-box {
+  background: var(--bg); border-radius: 8px; padding: 12px;
+  font-size: 13px; line-height: 1.7; color: var(--text-2);
+  white-space: pre-wrap; word-break: break-word; max-height: 200px;
+  overflow-y: auto; border: 1px solid var(--border);
+}
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.75); color: #fff; padding: 9px 18px;
+  border-radius: 20px; font-size: 14px; z-index: 999;
+  opacity: 0; transition: opacity 0.2s; pointer-events: none; white-space: nowrap;
+}
+.toast.show { opacity: 1; }
+
+/* Empty state */
+.empty { text-align: center; padding: 60px 20px; color: var(--text-3); }
+.empty svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.4; }
+.empty p { font-size: 14px; }
+
+/* Confirm dialog */
+.dialog-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  z-index: 300; display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.dialog-overlay.active { display: flex; }
+.dialog {
+  background: var(--bg-card); border-radius: 14px; width: 100%; max-width: 320px;
+  overflow: hidden;
+}
+.dialog-title { font-size: 16px; font-weight: 600; padding: 18px 18px 8px; }
+.dialog-msg { font-size: 14px; color: var(--text-2); padding: 0 18px 18px; line-height: 1.6; }
+.dialog-btns { display: flex; border-top: 1px solid var(--border); }
+.dialog-btn { flex: 1; padding: 14px; font-size: 16px; text-align: center; }
+.dialog-btn + .dialog-btn { border-left: 1px solid var(--border); }
+.dialog-btn.confirm { color: var(--danger); font-weight: 500; }
+.dialog-btn.cancel { color: var(--text-2); }
+
+/* Streaming cursor */
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+.cursor { display: inline-block; width: 2px; height: 14px; background: var(--text); animation: blink 1s infinite; vertical-align: middle; margin-left: 2px; }
+
+/* Folder tree */
+.folder-group { margin-bottom: 6px; }
+.folder-header {
+  display: flex; align-items: center; gap: 8px; padding: 9px 14px;
+  background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border);
+  cursor: pointer; user-select: none;
+}
+.folder-header:active { background: var(--primary-light); }
+.folder-arrow { flex-shrink: 0; transition: transform 0.2s; color: var(--text-3); }
+.folder-arrow.collapsed { transform: rotate(-90deg); }
+.folder-label { flex: 1; font-size: 14px; font-weight: 600; color: var(--text); }
+.folder-count { font-size: 12px; color: var(--text-3); }
+.folder-children { margin-left: 14px; padding-left: 10px; border-left: 2px solid var(--border); margin-top: 4px; }
+.folder-children.hidden { display: none; }
+.file-item.in-folder { border-radius: 8px; margin-bottom: 4px; }
+.drag-handle {
+  width: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--text-3); touch-action: pan-y; cursor: grab; opacity: 0.5;
+}
+.drag-handle:active { cursor: grabbing; }
+.drag-handle svg { width: 14px; height: 14px; }
+.file-item.dragging, .folder-group.dragging { opacity: 0.3; }
+.drag-ghost {
+  position: fixed; pointer-events: none; z-index: 500; opacity: 0.9;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15); border-radius: var(--radius);
+  background: var(--bg-card); border: 1px solid var(--primary);
+}
+.drop-indicator {
+  height: 2px; background: var(--primary); border-radius: 2px;
+  margin: 1px 0; pointer-events: none;
+}
+
+/* Project list */
+#overlay-project { z-index: 250; }
+.project-item {
+  background: var(--bg-card); border-radius: var(--radius);
+  border: 1px solid var(--border); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 0;
+}
+.project-item-body { flex: 1; padding: 14px 16px; cursor: pointer; min-width: 0; }
+.project-item-body:active { background: var(--primary-light); border-radius: var(--radius) 0 0 var(--radius); }
+.project-name { font-size: 16px; font-weight: 600; }
+.project-meta { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+.project-edit-btn {
+  width: 44px; height: 100%; display: flex; align-items: center; justify-content: center;
+  color: var(--text-3); border-left: 1px solid var(--border); flex-shrink: 0; padding: 14px 0;
+}
+.project-edit-btn:active { background: var(--bg); }
+</style>
+<script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <!-- ===== TAB: 文件 ===== -->
+  <div class="tab-content active" id="tab-files">
+    <div class="header">
+      <h1 id="header-project-name" style="font-size:16px;flex:1">项目</h1>
+      <input id="file-search-input" placeholder="搜索文件..." style="flex:1;display:none;border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:14px;outline:none;background:var(--bg);color:var(--text)">
+      <button class="header-btn" id="btn-search" title="搜索文件">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+      <button class="header-btn" id="btn-sync" title="GitHub 同步" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
+      <button class="header-btn" id="btn-new-file" title="新建文件">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+    <div class="list-area" id="file-list"></div>
+    <div class="assemble-bar hidden" id="assemble-bar">
+      <span class="assemble-count" id="assemble-count"></span>
+      <button class="btn-secondary" id="btn-select-all" style="padding:9px 12px;font-size:13px">全选</button>
+      <button class="btn-secondary" id="btn-clear-sel" style="padding:9px 12px;font-size:13px">清空</button>
+      <button class="btn-primary" id="btn-assemble">拼装提示词</button>
+    </div>
+  </div>
+
+  <!-- ===== TAB: 对话 ===== -->
+  <div class="tab-content" id="tab-chat">
+    <div class="chat-model-bar">
+      <button class="model-select-btn" id="btn-model-select">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+        <span id="current-model-label">请选择模型</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="margin-left:auto"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-history" title="历史对话">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-new-chat" title="新对话">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      <div class="empty" id="chat-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <p>选择文件拼装提示词，或直接输入开始对话</p>
+      </div>
+    </div>
+    <button class="scroll-bottom-btn" id="btn-chat-bottom" title="滚动到底部" aria-label="滚动到底部">↓</button>
+    <div class="chat-input-area">
+      <textarea class="chat-input" id="chat-input" placeholder="输入消息..." rows="1"></textarea>
+      <button class="send-btn" id="btn-send" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+      <button class="send-btn" id="btn-stop" style="display:none;background:var(--danger)">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== TAB: 设置 ===== -->
+  <div class="tab-content" id="tab-settings">
+    <div class="header"><h1>设置</h1></div>
+    <div class="list-area">
+      <div class="setting-section">
+        <div class="setting-label">AI 提供商</div>
+        <div id="provider-list"></div>
+        <button class="btn-secondary" style="width:100%;margin-top:8px" id="btn-add-provider">+ 添加提供商</button>
+      </div>
+      <div class="setting-section">
+        <div class="setting-label">应用</div>
+        <div class="setting-item" id="btn-theme" style="cursor:pointer">
+          <span class="setting-item-label">主题</span>
+          <span class="setting-item-value" id="theme-label">跟随系统</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+        <div class="setting-item" id="btn-reload" style="cursor:pointer">
+          <span class="setting-item-label">刷新应用（获取最新版本）</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </div>
+      </div>
+      <div class="setting-section">
+        <div class="setting-label">数据管理</div>
+        <div class="setting-item" id="btn-export" style="cursor:pointer">
+          <span class="setting-item-label">导出全部数据</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </div>
+        <div class="setting-item" id="btn-import" style="cursor:pointer">
+          <span class="setting-item-label">导入备份</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+      </div>
+      <div class="setting-section">
+        <div class="setting-label">项目管理</div>
+        <button class="btn-secondary" style="width:100%;margin-bottom:8px" id="btn-add-project">+ 新建项目</button>
+        <div id="project-manage-list"></div>
+      </div>
+    </div>
+    <input type="file" id="import-input" accept=".json" style="display:none">
+  </div>
+
+  <!-- ===== Overlays ===== -->
+  <!-- 拼装面板 -->
+  <div class="overlay" id="overlay-assemble">
+    <div class="sheet">
+      <div class="sheet-header">
+        <span class="sheet-title">拼装提示词</span>
+        <button class="sheet-close" id="btn-close-assemble">×</button>
+      </div>
+      <div class="sheet-body">
+        <div class="form-group">
+          <label class="form-label">已选文件</label>
+          <div id="assemble-files-list" style="font-size:13px;color:var(--text-2);line-height:2"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">自定义提示词（支持 {{变量名}} 占位符）</label>
+          <textarea class="form-input" id="assemble-prompt" rows="4" placeholder="在此输入你的指令或问题..."></textarea>
+        </div>
+        <div class="form-group" id="assemble-vars-group" style="display:none">
+          <label class="form-label">变量替换</label>
+          <div id="assemble-vars-list"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">预览</label>
+          <div id="assemble-stats" style="font-size:12px;color:var(--text-3);text-align:right;margin:-2px 0 6px"></div>
+          <textarea class="preview-box" id="assemble-preview" style="resize:vertical;min-height:120px;font-family:inherit" placeholder="预览将在此处生成，可直接编辑..."></textarea>
+        </div>
+      </div>
+      <div class="sheet-footer">
+        <button class="btn-secondary" id="btn-copy-assemble" style="flex:1">复制全文</button>
+        <button class="btn-primary" id="btn-send-assemble" style="flex:1">发给 AI</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模型选择 -->
+  <div class="overlay" id="overlay-model">
+    <div class="sheet">
+      <div class="sheet-header">
+        <span class="sheet-title">选择模型</span>
+        <button class="sheet-close" id="btn-close-model">×</button>
+      </div>
+      <div class="sheet-body" id="model-list"></div>
+    </div>
+  </div>
+
+  <!-- 历史对话 -->
+  <div class="overlay" id="overlay-history">
+    <div class="sheet">
+      <div class="sheet-header">
+        <span class="sheet-title">历史对话</span>
+        <button class="sheet-close" id="btn-close-history">×</button>
+      </div>
+      <div class="sheet-body" id="history-list"></div>
+    </div>
+  </div>
+
+  <!-- 提供商编辑 -->
+  <div class="overlay" id="overlay-provider">
+    <div class="sheet">
+      <div class="sheet-header">
+        <span class="sheet-title" id="provider-sheet-title">添加提供商</span>
+        <button class="sheet-close" id="btn-close-provider">×</button>
+      </div>
+      <div class="sheet-body">
+        <div class="form-group">
+          <label class="form-label">提供商名称</label>
+          <input class="form-input" id="p-name" placeholder="如：DeepSeek、Claude">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Base URL</label>
+          <input class="form-input" id="p-url" placeholder="https://api.openai.com/v1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">API Key</label>
+          <div style="position:relative">
+            <input class="form-input" id="p-key" type="password" placeholder="sk-..." style="padding-right:40px">
+            <button type="button" id="p-key-toggle" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-3);font-size:13px;padding:4px 6px;cursor:pointer">显示</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">模型列表</label>
+          <div class="model-tags" id="p-model-tags"></div>
+          <div style="background:var(--bg);border-radius:8px;padding:10px 12px;margin-top:8px">
+            <div style="font-size:12px;color:var(--text-3);margin-bottom:8px;font-weight:500">添加模型</div>
+            <input class="form-input" id="p-model-name" placeholder="显示名（如 DeepSeek V3）" style="margin-bottom:6px">
+            <input class="form-input" id="p-model-id" placeholder="模型 ID（如 deepseek-chat）" style="margin-bottom:8px">
+            <input class="form-input" id="p-model-tokens" type="number" placeholder="Max Tokens（默认 8192）" style="margin-bottom:6px">
+            <input class="form-input" id="p-model-temp" type="number" step="0.1" placeholder="Temperature（可选，如 0.7）" style="margin-bottom:6px">
+            <input class="form-input" id="p-model-topp" type="number" step="0.1" placeholder="Top P（可选，如 0.9）" style="margin-bottom:8px">
+            <button class="btn-secondary" id="btn-add-model-tag" style="width:100%;padding:9px 12px">+ 添加</button>
+          </div>
+        </div>
+      </div>
+      <div class="sheet-footer">
+        <button class="btn-danger" id="btn-delete-provider" style="display:none">删除</button>
+        <button class="btn-secondary" id="btn-cancel-provider" style="flex:1">取消</button>
+        <button class="btn-primary" id="btn-save-provider" style="flex:1">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 项目编辑 sheet -->
+  <div class="overlay" id="overlay-project">
+    <div class="sheet">
+      <div class="sheet-header">
+        <span class="sheet-title" id="project-sheet-title">新建项目</span>
+        <button class="sheet-close" id="btn-close-project">×</button>
+      </div>
+      <div class="sheet-body">
+        <div class="form-group">
+          <label class="form-label">项目名称</label>
+          <input class="form-input" id="proj-name" placeholder="如：小说项目、工作笔记">
+        </div>
+        <div style="font-size:12px;color:var(--text-3);padding:4px 0 8px;text-transform:uppercase;letter-spacing:0.5px;margin-top:8px">GitHub 同步（可选）</div>
+        <div class="form-group">
+          <label class="form-label">Personal Access Token</label>
+          <div style="position:relative">
+            <input class="form-input" id="proj-pat" type="password" placeholder="ghp_..." style="padding-right:40px">
+            <button type="button" id="proj-pat-toggle" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-3);font-size:13px;padding:4px 6px;cursor:pointer">显示</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">仓库（owner/repo）</label>
+          <input class="form-input" id="proj-repo" placeholder="如：O2ban/novel-data">
+        </div>
+        <div class="form-group">
+          <label class="form-label">目录前缀</label>
+          <input class="form-input" id="proj-dir" placeholder="如：小说项目（留空则同步根目录）">
+        </div>
+        <div class="form-group">
+          <label class="form-label">分支</label>
+          <input class="form-input" id="proj-branch" placeholder="main">
+        </div>
+        <div style="font-size:12px;color:var(--text-3);padding:4px 0 8px;text-transform:uppercase;letter-spacing:0.5px;margin-top:8px">AI 对话（可选）</div>
+        <div class="form-group">
+          <label class="form-label">System Prompt（每个对话自动注入）</label>
+          <textarea class="form-input" id="proj-system-prompt" rows="4" placeholder="如：你是一个专业的小说编辑，请用严谨的中文回答..." style="resize:vertical;font-family:inherit"></textarea>
+        </div>
+      </div>
+      <div class="sheet-footer">
+        <button class="btn-danger" id="btn-delete-project" style="display:none">删除</button>
+        <button class="btn-secondary" id="btn-export-project" style="display:none">导出</button>
+        <button class="btn-secondary" id="btn-cancel-project" style="flex:1">取消</button>
+        <button class="btn-primary" id="btn-save-project" style="flex:1">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 同步 sheet -->
+  <div class="overlay" id="overlay-sync" style="z-index:250">
+    <div class="sheet">
+      <div class="sheet-header">
+        <span class="sheet-title">GitHub 同步</span>
+        <button class="sheet-close" id="btn-close-sync">×</button>
+      </div>
+      <div class="sheet-body">
+        <div id="sync-log" style="font-size:13px;line-height:1.8;color:var(--text-2);min-height:60px;white-space:pre-wrap;word-break:break-all"></div>
+      </div>
+      <div class="sheet-footer" style="flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px">
+          <button class="btn-secondary" id="btn-sync-pull" style="flex:1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" style="vertical-align:middle;margin-right:4px"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="3" x2="12" y2="21"/></svg>拉取
+          </button>
+          <button class="btn-primary" id="btn-sync-push" style="flex:1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" style="vertical-align:middle;margin-right:4px"><polyline points="16 7 12 3 8 7"/><line x1="12" y1="3" x2="12" y2="21"/></svg>推送
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 文件编辑器 -->
+  <div class="fullscreen" id="editor-screen">
+    <div class="editor-header">
+      <button class="icon-btn" id="btn-editor-back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:0">
+        <input class="editor-title-input" id="editor-title" placeholder="文件名（可含 / 指定目录）">
+        <div id="editor-folder-row" style="display:flex;align-items:center;gap:4px;padding:2px 0 4px;border-top:1px solid var(--border)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" style="color:var(--text-3);flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <select id="editor-folder-select" style="font-size:12px;border:none;background:transparent;color:var(--primary);outline:none;flex:1;min-width:0">
+            <option value="">根目录</option>
+          </select>
+          <input id="editor-folder-new" class="form-input" placeholder="新目录名" style="display:none;font-size:12px;padding:2px 6px;height:24px;flex:1">
+          <button id="btn-folder-new-toggle" style="font-size:11px;color:var(--primary);padding:2px 6px;border-radius:4px;background:var(--primary-light);border:none;flex-shrink:0">+ 新建</button>
+        </div>
+      </div>
+      <button class="icon-btn" id="btn-copy-file" title="复制内容">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </button>
+    </div>
+    <textarea class="editor-textarea" id="editor-content" placeholder="在此输入文件内容..."></textarea>
+  </div>
+
+  <!-- 确认对话框 -->
+  <div class="dialog-overlay" id="dialog-overlay">
+    <div class="dialog">
+      <div class="dialog-title" id="dialog-title"></div>
+      <div class="dialog-msg" id="dialog-msg"></div>
+      <div class="dialog-btns">
+        <button class="dialog-btn cancel" id="dialog-cancel">取消</button>
+        <button class="dialog-btn confirm" id="dialog-confirm">删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- ===== Bottom Tabs ===== -->
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="files">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      文件
+    </button>
+    <button class="tab-btn" data-tab="chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      对话
+    </button>
+    <button class="tab-btn" data-tab="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      设置
+    </button>
+  </nav>
+</div>
+<script>
+// ===== DB =====
+const DB_NAME = 'promptbox', DB_VER = 3;
+let db;
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('files')) d.createObjectStore('files', {keyPath:'id'});
+      if (!d.objectStoreNames.contains('conversations')) d.createObjectStore('conversations', {keyPath:'id'});
+      if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings', {keyPath:'key'});
+      if (!d.objectStoreNames.contains('projects')) d.createObjectStore('projects', {keyPath:'id'});
+      if (!d.objectStoreNames.contains('folderMeta')) d.createObjectStore('folderMeta', {keyPath:'key'});
+    };
+    req.onsuccess = e => { db = e.target.result; res(db); };
+    req.onerror = e => rej(e);
+  });
+}
+function dbGet(store, key) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).get(key);
+    req.onsuccess = () => res(req.result);
+    req.onerror = rej;
+  });
+}
+function dbGetAll(store) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror = rej;
+  });
+}
+function dbPut(store, val) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).put(val);
+    req.onsuccess = () => res(req.result);
+    req.onerror = rej;
+  });
+}
+function dbDelete(store, key) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).delete(key);
+    req.onsuccess = () => res();
+    req.onerror = rej;
+  });
+}
+function dbPutBatch(store, items) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readwrite');
+    const os = tx.objectStore(store);
+    for (const item of items) os.put(item);
+    tx.oncomplete = () => res();
+    tx.onerror = rej;
+  });
+}
+function dbClear(store) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).clear();
+    req.onsuccess = () => res();
+    req.onerror = rej;
+  });
+}
+function uuid() { return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function ts() { return Date.now(); }
+function fmtDate(t) {
+  const d = new Date(t), now = new Date();
+  if (d.toDateString() === now.toDateString()) return d.toTimeString().slice(0,5);
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+// ===== STATE =====
+let files = [], providers = [], conversations = [], settings = {}, projects = [], folderMetas = [];
+let currentProjectId = null;
+let currentConvId = null;
+let selectedFileIds = []; // 有序数组，维护拼装顺序
+let editingFileId = null;
+let editingProviderId = null;
+let editingProjectId = null;
+let pendingAssembledText = null;
+let isStreaming = false;
+let abortController = null;
+let tempModelTags = [];
+let editingModelIndex = -1;
+let dragState = null;
+
+// ===== LOAD =====
+async function loadAll() {
+  projects = await dbGetAll('projects');
+  projects.sort((a,b) => a.createdAt - b.createdAt);
+
+  const allFiles = await dbGetAll('files');
+  const allConvs = await dbGetAll('conversations');
+
+  // 迁移：旧数据没有 projectId，分配到默认项目
+  const needsMigration = (allFiles.some(f => !f.projectId) || allConvs.some(c => !c.projectId));
+  if (needsMigration) {
+    let defaultProj = projects.find(p => p.name === '默认项目') || projects[0];
+    if (!defaultProj) {
+      defaultProj = { id: uuid(), name: '默认项目', createdAt: ts(), updatedAt: ts() };
+      projects.push(defaultProj);
+      await dbPut('projects', defaultProj);
+    }
+    for (const f of allFiles) {
+      if (!f.projectId) { f.projectId = defaultProj.id; await dbPut('files', f); }
+    }
+    for (const c of allConvs) {
+      if (!c.projectId) { c.projectId = defaultProj.id; await dbPut('conversations', c); }
+    }
+  }
+
+  files = allFiles.sort((a,b) => b.updatedAt - a.updatedAt);
+  conversations = allConvs.sort((a,b) => b.updatedAt - a.updatedAt);
+  folderMetas = await dbGetAll('folderMeta');
+  const s = await dbGet('settings', 'main');
+  settings = s ? s.data : { providers: [], currentProviderId: null, currentModelId: null };
+  providers = settings.providers || [];
+}
+
+// ===== TOAST =====
+let toastTimer;
+function toast(msg, actionLabel, onAction, duration = 2000) {
+  const el = document.getElementById('toast');
+  if (actionLabel && onAction) {
+    el.innerHTML = `<span>${esc(msg)}</span> <button class="toast-action" style="background:none;border:none;color:var(--primary);font-weight:600;padding:0 4px;cursor:pointer;font-size:14px">${esc(actionLabel)}</button>`;
+    el.querySelector('.toast-action').onclick = () => {
+      onAction();
+      el.classList.remove('show');
+    };
+  } else {
+    el.textContent = msg;
+  }
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+// ===== CONFIRM DIALOG =====
+let dialogResolve;
+function confirm(title, msg, confirmText = '删除') {
+  return new Promise(res => {
+    dialogResolve = res;
+    document.getElementById('dialog-title').textContent = title;
+    document.getElementById('dialog-msg').textContent = msg;
+    document.getElementById('dialog-confirm').textContent = confirmText;
+    document.getElementById('dialog-overlay').classList.add('active');
+  });
+}
+document.getElementById('dialog-cancel').onclick = () => {
+  document.getElementById('dialog-overlay').classList.remove('active');
+  if (dialogResolve) dialogResolve(false);
+};
+document.getElementById('dialog-confirm').onclick = () => {
+  document.getElementById('dialog-overlay').classList.remove('active');
+  if (dialogResolve) dialogResolve(true);
+};
+
+// ===== TABS =====
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + tab).classList.add('active');
+    if (tab === 'settings') { renderProviders(); renderProjectManageList(); }
+  });
+});
+
+// ===== FILES =====
+function getFolderMeta(projectId, folderName) {
+  return folderMetas.find(m => m.projectId === projectId && m.name === folderName);
+}
+
+function ensureFolderMeta(projectId, folderName) {
+  let meta = getFolderMeta(projectId, folderName);
+  if (!meta) {
+    meta = { key: `${projectId}::${folderName}`, projectId, name: folderName, sortOrder: 9999, collapsed: false };
+    folderMetas.push(meta);
+  }
+  return meta;
+}
+
+function buildTree(projectFiles) {
+  const folderMap = new Map();
+  const rootFiles = [];
+  for (const f of projectFiles) {
+    if (f.folder) {
+      if (!folderMap.has(f.folder)) folderMap.set(f.folder, []);
+      folderMap.get(f.folder).push(f);
+    } else {
+      rootFiles.push(f);
+    }
+  }
+  for (const arr of folderMap.values()) {
+    arr.sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || b.updatedAt - a.updatedAt);
+  }
+  rootFiles.sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || b.updatedAt - a.updatedAt);
+  const folders = [...folderMap.entries()].map(([name, fls]) => {
+    const meta = getFolderMeta(currentProjectId, name);
+    return { name, files: fls, sortOrder: meta?.sortOrder ?? 9999, collapsed: meta?.collapsed ?? false };
+  });
+  folders.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'zh'));
+  const topItems = [
+    ...folders.map(folder => ({ type: 'folder', sortOrder: folder.sortOrder, name: folder.name, folder })),
+    ...rootFiles.map(file => ({ type: 'file', sortOrder: file.sortOrder ?? 9999, name: file.name, file }))
+  ];
+  topItems.sort((a, b) => a.sortOrder - b.sortOrder || (a.type === b.type ? a.name.localeCompare(b.name, 'zh') : a.type === 'folder' ? -1 : 1));
+  return { topItems, folders, rootFiles };
+}
+
+const DRAG_HANDLE_SVG = `<svg viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.2"/><circle cx="7" cy="3" r="1.2"/><circle cx="3" cy="8" r="1.2"/><circle cx="7" cy="8" r="1.2"/><circle cx="3" cy="13" r="1.2"/><circle cx="7" cy="13" r="1.2"/></svg>`;
+
+function renderFileItem(f, inFolder) {
+  const checked = selectedFileIds.includes(f.id);
+  return `<div class="file-item ${checked ? 'checked' : ''} ${inFolder ? 'in-folder' : ''}" data-id="${f.id}">
+    <span class="drag-handle" data-drag-file="${f.id}">${DRAG_HANDLE_SVG}</span>
+    <div class="file-check" data-check="${f.id}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div style="flex:1;min-width:0" data-edit="${f.id}">
+      <div class="file-name">${esc(f.name)}</div>
+      <div class="file-meta">${(f.content || '').length} 字 · ${fmtDate(f.updatedAt)}</div>
+    </div>
+    <div class="file-actions">
+      <button class="icon-btn" data-copy-file="${f.id}" title="复制内容">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      </button>
+      <button class="icon-btn" data-del-file="${f.id}" title="删除" style="color:var(--danger)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
+
+function renderFolderGroup(folder) {
+  const collapsed = folder.collapsed;
+  return `<div class="folder-group" data-folder-group="${esc(folder.name)}">
+    <div class="folder-header" data-toggle-folder="${esc(folder.name)}">
+      <span class="drag-handle" data-drag-folder="${esc(folder.name)}">${DRAG_HANDLE_SVG}</span>
+      <svg class="folder-arrow ${collapsed ? 'collapsed' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><polyline points="6 9 12 15 18 9"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--primary);flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="folder-label">${esc(folder.name)}</span>
+      <span class="folder-count">${folder.files.length}</span>
+    </div>
+    <div class="folder-children ${collapsed ? 'hidden' : ''}" data-folder-children="${esc(folder.name)}">
+      ${folder.files.map(f => renderFileItem(f, true)).join('')}
+    </div>
+  </div>`;
+}
+
+let fileSearchQuery = '';
+function renderFiles() {
+  const el = document.getElementById('file-list');
+  let projectFiles = files.filter(f => f.projectId === currentProjectId);
+  const q = fileSearchQuery.trim().toLowerCase();
+  if (q) {
+    projectFiles = projectFiles.filter(f =>
+      f.name.toLowerCase().includes(q) || (f.content || '').toLowerCase().includes(q)
+    );
+    if (!projectFiles.length) {
+      el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><p>没有匹配「${esc(fileSearchQuery)}」的文件</p></div>`;
+      updateAssembleBar();
+      return;
+    }
+    // 搜索结果扁平展示，不分文件夹
+    el.innerHTML = projectFiles.map(f => renderFileItem(f, false)).join('');
+    updateAssembleBar();
+    return;
+  }
+  if (!projectFiles.length) {
+    el.innerHTML = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>还没有文件，点右上角 + 新建</p></div>`;
+  } else {
+    const { topItems } = buildTree(projectFiles);
+    el.innerHTML = topItems.map(item => item.type === 'folder' ? renderFolderGroup(item.folder) : renderFileItem(item.file, false)).join('');
+  }
+  updateAssembleBar();
+}
+
+function updateAssembleBar() {
+  const bar = document.getElementById('assemble-bar');
+  const cnt = document.getElementById('assemble-count');
+  const btnAssemble = document.getElementById('btn-assemble');
+  const projectFiles = files.filter(f => f.projectId === currentProjectId);
+  if (projectFiles.length === 0) {
+    bar.classList.add('hidden');
+    return;
+  }
+  bar.classList.remove('hidden');
+  cnt.textContent = selectedFileIds.length > 0 ? `已选 ${selectedFileIds.length} / ${projectFiles.length}` : `共 ${projectFiles.length} 个文件`;
+  if (btnAssemble) btnAssemble.disabled = selectedFileIds.length === 0;
+}
+
+function getVisibleFileIds() {
+  let projectFiles = files.filter(f => f.projectId === currentProjectId);
+  const q = fileSearchQuery.trim().toLowerCase();
+  if (q) {
+    projectFiles = projectFiles.filter(f =>
+      f.name.toLowerCase().includes(q) || (f.content || '').toLowerCase().includes(q)
+    );
+  }
+  return projectFiles.map(f => f.id);
+}
+
+document.getElementById('btn-select-all').onclick = () => {
+  const ids = getVisibleFileIds();
+  const set = new Set(selectedFileIds);
+  for (const id of ids) if (!set.has(id)) selectedFileIds.push(id);
+  renderFiles();
+};
+
+document.getElementById('btn-clear-sel').onclick = () => {
+  selectedFileIds = [];
+  renderFiles();
+};
+
+document.getElementById('file-list').addEventListener('click', async e => {
+  if (dragState) return; // 拖拽中忽略点击
+  const checkId = e.target.closest('[data-check]')?.dataset.check;
+  const editId = e.target.closest('[data-edit]')?.dataset.edit;
+  const copyId = e.target.closest('[data-copy-file]')?.dataset.copyFile;
+  const delId = e.target.closest('[data-del-file]')?.dataset.delFile;
+  const toggleFolder = e.target.closest('[data-toggle-folder]')?.dataset.toggleFolder;
+
+  if (checkId) {
+    if (selectedFileIds.includes(checkId)) {
+      selectedFileIds = selectedFileIds.filter(id => id !== checkId);
+    } else {
+      selectedFileIds.push(checkId);
+    }
+    // 只更新勾选样式，不重渲染整个列表
+    const itemEl = document.querySelector(`.file-item[data-id="${checkId}"]`);
+    if (itemEl) itemEl.classList.toggle('checked', selectedFileIds.includes(checkId));
+    updateAssembleBar();
+  } else if (editId) {
+    openEditor(editId);
+  } else if (copyId) {
+    const f = files.find(x => x.id === copyId);
+    if (f) { await copyText(f.content); toast('已复制文件内容'); }
+  } else if (delId) {
+    const f = files.find(x => x.id === delId);
+    if (!f) return;
+    const ok = await confirm('删除文件', `确定删除「${f.name}」？5 秒内可撤销。`);
+    if (ok) {
+      const idx = files.indexOf(f);
+      files = files.filter(x => x.id !== delId);
+      selectedFileIds = selectedFileIds.filter(id => id !== delId);
+      renderFiles();
+      let undone = false;
+      toast('已删除', '撤销', () => {
+        undone = true;
+        files.splice(idx, 0, f);
+        renderFiles();
+        toast('已恢复');
+      }, 5000);
+      setTimeout(async () => {
+        if (!undone) await dbDelete('files', delId);
+      }, 5000);
+    }
+  } else if (toggleFolder !== undefined) {
+    // 不要让拖拽手柄触发折叠
+    if (e.target.closest('[data-drag-folder]')) return;
+    await toggleFolderCollapse(toggleFolder);
+  }
+});
+
+async function toggleFolderCollapse(folderName) {
+  const key = `${currentProjectId}::${folderName}`;
+  let meta = folderMetas.find(m => m.key === key);
+  if (!meta) {
+    meta = { key, projectId: currentProjectId, name: folderName, sortOrder: 9999, collapsed: false };
+    folderMetas.push(meta);
+  }
+  meta.collapsed = !meta.collapsed;
+  await dbPut('folderMeta', meta);
+  // 只切换 DOM，不重渲染
+  const childrenEl = document.querySelector(`[data-folder-children="${CSS.escape(folderName)}"]`);
+  const arrowEl = document.querySelector(`[data-folder-group="${CSS.escape(folderName)}"] .folder-arrow`);
+  if (childrenEl) childrenEl.classList.toggle('hidden', meta.collapsed);
+  if (arrowEl) arrowEl.classList.toggle('collapsed', meta.collapsed);
+}
+
+document.getElementById('btn-new-file').onclick = () => openEditor(null);
+
+// 文件搜索切换
+document.getElementById('btn-search').onclick = () => {
+  const input = document.getElementById('file-search-input');
+  const title = document.getElementById('header-project-name');
+  const isSearchMode = input.style.display !== 'none';
+  if (isSearchMode) {
+    input.style.display = 'none';
+    title.style.display = '';
+    fileSearchQuery = '';
+    input.value = '';
+    renderFiles();
+  } else {
+    input.style.display = '';
+    title.style.display = 'none';
+    input.focus();
+  }
+};
+document.getElementById('file-search-input').addEventListener('input', e => {
+  fileSearchQuery = e.target.value;
+  renderFiles();
+});
+
+function openEditor(fileId) {
+  editingFileId = fileId;
+  const f = fileId ? files.find(x => x.id === fileId) : null;
+  document.getElementById('editor-title').value = f ? f.name : '';
+  document.getElementById('editor-content').value = f ? f.content : '';
+  // 填充目录下拉
+  const sel = document.getElementById('editor-folder-select');
+  const existingFolders = [...new Set(
+    files.filter(x => x.projectId === currentProjectId && x.folder).map(x => x.folder)
+  )].sort((a, b) => a.localeCompare(b, 'zh'));
+  sel.innerHTML = '<option value="">根目录</option>' +
+    existingFolders.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  sel.value = f?.folder || '';
+  document.getElementById('editor-folder-new').style.display = 'none';
+  document.getElementById('editor-folder-new').value = '';
+  document.getElementById('btn-folder-new-toggle').textContent = '+ 新建';
+  document.getElementById('editor-screen').classList.add('active');
+  setTimeout(() => {
+    if (!f) document.getElementById('editor-title').focus();
+    else document.getElementById('editor-content').focus();
+  }, 100);
+}
+
+// 新建目录切换
+document.getElementById('btn-folder-new-toggle').onclick = () => {
+  const newInput = document.getElementById('editor-folder-new');
+  const sel = document.getElementById('editor-folder-select');
+  const btn = document.getElementById('btn-folder-new-toggle');
+  if (newInput.style.display === 'none') {
+    newInput.style.display = '';
+    sel.style.display = 'none';
+    btn.textContent = '取消';
+    newInput.focus();
+  } else {
+    newInput.style.display = 'none';
+    sel.style.display = '';
+    btn.textContent = '+ 新建';
+  }
+};
+
+document.getElementById('btn-editor-back').onclick = saveAndCloseEditor;
+document.getElementById('editor-title').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('editor-content').focus(); });
+
+async function saveAndCloseEditor() {
+  let name = document.getElementById('editor-title').value.trim() || '未命名文件';
+  const content = document.getElementById('editor-content').value;
+  const newFolderInput = document.getElementById('editor-folder-new');
+  let folder;
+  if (newFolderInput.style.display !== 'none' && newFolderInput.value.trim()) {
+    folder = newFolderInput.value.trim();
+  } else {
+    folder = document.getElementById('editor-folder-select').value;
+  }
+  // 文件名含 / 时优先解析
+  if (name.includes('/')) {
+    const idx = name.lastIndexOf('/');
+    folder = name.slice(0, idx).trim() || folder;
+    name = name.slice(idx + 1).trim() || '未命名文件';
+  }
+  if (editingFileId) {
+    const f = files.find(x => x.id === editingFileId);
+    if (f) {
+      f.name = name;
+      f.folder = folder || undefined;
+      f.content = content;
+      f.updatedAt = ts();
+      await dbPut('files', f);
+    }
+  } else {
+    if (content.trim() || name !== '未命名文件') {
+      const f = { id: uuid(), name, folder: folder || undefined, content, projectId: currentProjectId, createdAt: ts(), updatedAt: ts() };
+      files.unshift(f);
+      await dbPut('files', f);
+    }
+  }
+  document.getElementById('editor-screen').classList.remove('active');
+  renderFiles();
+}
+
+document.getElementById('btn-copy-file').onclick = async () => {
+  const content = document.getElementById('editor-content').value;
+  await copyText(content);
+  toast('已复制');
+};
+
+// ===== DRAG SORT =====
+(function() {
+  const LONG_PRESS_MS = 200;
+  let pressTimer = null;
+  let startTouch = null;
+
+  function getFileListEl() { return document.getElementById('file-list'); }
+
+  function clearTextSelection() {
+    const selection = window.getSelection?.();
+    if (selection && !selection.isCollapsed) selection.removeAllRanges();
+  }
+
+  function createGhost(sourceEl) {
+    const rect = sourceEl.getBoundingClientRect();
+    const ghost = sourceEl.cloneNode(true);
+    ghost.className = 'drag-ghost';
+    ghost.style.width = rect.width + 'px';
+    ghost.style.top = rect.top + 'px';
+    ghost.style.left = rect.left + 'px';
+    document.body.appendChild(ghost);
+    return ghost;
+  }
+
+  function moveGhost(ghost, dy) {
+    const top = parseFloat(ghost.style.top) + dy;
+    ghost.style.top = top + 'px';
+  }
+
+  function removeDropIndicator() {
+    document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+  }
+
+  // 重新计算 sortOrder：取前后平均值，精度不足时全量重排
+  function calcNewOrder(siblings, insertAfterIdx) {
+    const prev = insertAfterIdx >= 0 ? siblings[insertAfterIdx] : null;
+    const next = insertAfterIdx + 1 < siblings.length ? siblings[insertAfterIdx + 1] : null;
+    const prevOrder = prev ? (prev.sortOrder ?? 0) : (next ? (next.sortOrder ?? 0) - 2000 : 0);
+    const nextOrder = next ? (next.sortOrder ?? 0) : prevOrder + 2000;
+    const newOrder = (prevOrder + nextOrder) / 2;
+    // 精度不足时触发全量重排
+    if (Math.abs(nextOrder - prevOrder) < 1) return null;
+    return newOrder;
+  }
+
+  function reindexSortOrder(items) {
+    items.forEach((item, i) => { item.sortOrder = i * 1000; });
+  }
+
+  // ---- 文件拖拽 ----
+  async function endFileDrag(fileId, folderName, insertAfterEl) {
+    const siblings = files.filter(f => f.projectId === currentProjectId && (f.folder || '') === (folderName || ''));
+    siblings.sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || b.updatedAt - a.updatedAt);
+    const draggedFile = files.find(f => f.id === fileId);
+    if (!draggedFile) return;
+    if (!folderName) {
+      const projectFiles = files.filter(f => f.projectId === currentProjectId);
+      const topItems = buildTree(projectFiles).topItems.filter(item => !(item.type === 'file' && item.file.id === fileId));
+      let topInsertAfterIdx = -1;
+      if (insertAfterEl) {
+        topInsertAfterIdx = topItems.findIndex(item =>
+          (item.type === 'file' && item.file.id === insertAfterEl.dataset.id) ||
+          (item.type === 'folder' && item.name === insertAfterEl.dataset.folderGroup)
+        );
+      }
+      let topNewOrder = calcNewOrder(topItems, topInsertAfterIdx);
+      if (topNewOrder === null) {
+        reindexSortOrder(topItems);
+        topNewOrder = calcNewOrder(topItems, topInsertAfterIdx);
+      }
+      draggedFile.folder = undefined;
+      draggedFile.sortOrder = topNewOrder ?? 0;
+      draggedFile.updatedAt = ts();
+      const filesBatch = [draggedFile];
+      const metasBatch = [];
+      for (const item of topItems) {
+        if (item.sortOrder === undefined) continue;
+        if (item.type === 'file') {
+          item.file.sortOrder = item.sortOrder;
+          filesBatch.push(item.file);
+        } else {
+          const meta = ensureFolderMeta(currentProjectId, item.name);
+          meta.sortOrder = item.sortOrder;
+          metasBatch.push(meta);
+        }
+      }
+      await dbPutBatch('files', filesBatch);
+      if (metasBatch.length) await dbPutBatch('folderMeta', metasBatch);
+      renderFiles();
+      return;
+    }
+    // 从 siblings 中移除被拖拽项，确定插入位置
+    const withoutDragged = siblings.filter(f => f.id !== fileId);
+    let insertAfterIdx = -1;
+    if (insertAfterEl) {
+      const afterId = insertAfterEl.dataset.id;
+      insertAfterIdx = withoutDragged.findIndex(f => f.id === afterId);
+    }
+    let newOrder = calcNewOrder(withoutDragged, insertAfterIdx);
+    if (newOrder === null) {
+      reindexSortOrder(withoutDragged);
+      newOrder = calcNewOrder(withoutDragged, insertAfterIdx);
+    }
+    draggedFile.sortOrder = newOrder ?? 0;
+    draggedFile.updatedAt = ts();
+    const filesBatch = [draggedFile, ...withoutDragged.filter(f => f.sortOrder !== undefined)];
+    await dbPutBatch('files', filesBatch);
+    renderFiles();
+  }
+
+  // ---- 目录拖拽 ----
+  async function endFolderDrag(folderName, insertAfterEl) {
+    // 获取当前所有目录（包括没有 meta 的）
+    const allFolderNames = [...new Set(files.filter(f => f.projectId === currentProjectId && f.folder).map(f => f.folder))];
+    // 确保每个目录都有 meta
+    const newMetas = [];
+    for (const name of allFolderNames) {
+      if (!folderMetas.find(m => m.projectId === currentProjectId && m.name === name)) {
+        newMetas.push(ensureFolderMeta(currentProjectId, name));
+      }
+    }
+    if (newMetas.length) await dbPutBatch('folderMeta', newMetas);
+    const projectFiles = files.filter(f => f.projectId === currentProjectId);
+    const topItems = buildTree(projectFiles).topItems.filter(item => !(item.type === 'folder' && item.name === folderName));
+    const draggedMeta = ensureFolderMeta(currentProjectId, folderName);
+    if (!draggedMeta) return;
+    let insertAfterIdx = -1;
+    if (insertAfterEl) {
+      insertAfterIdx = topItems.findIndex(item =>
+        (item.type === 'file' && item.file.id === insertAfterEl.dataset.id) ||
+        (item.type === 'folder' && item.name === insertAfterEl.dataset.folderGroup)
+      );
+    }
+    let newOrder = calcNewOrder(topItems, insertAfterIdx);
+    if (newOrder === null) {
+      reindexSortOrder(topItems);
+      newOrder = calcNewOrder(topItems, insertAfterIdx);
+    }
+    draggedMeta.sortOrder = newOrder ?? 0;
+    const metasBatch = [draggedMeta];
+    const filesBatch = [];
+    for (const item of topItems) {
+      if (item.sortOrder === undefined) continue;
+      if (item.type === 'file') {
+        item.file.sortOrder = item.sortOrder;
+        filesBatch.push(item.file);
+      } else {
+        const meta = ensureFolderMeta(currentProjectId, item.name);
+        meta.sortOrder = item.sortOrder;
+        metasBatch.push(meta);
+      }
+    }
+    if (filesBatch.length) await dbPutBatch('files', filesBatch);
+    await dbPutBatch('folderMeta', metasBatch);
+    renderFiles();
+  }
+
+  // ---- Pointer 事件（统一触屏 + 鼠标） ----
+  function beginDrag(handle, clientX, clientY) {
+    const isFile = handle.hasAttribute('data-drag-file');
+    const id = isFile ? handle.dataset.dragFile : handle.dataset.dragFolder;
+    const sourceEl = isFile
+      ? handle.closest('.file-item')
+      : handle.closest('.folder-group');
+    if (!sourceEl) return;
+    sourceEl.classList.add('dragging');
+    const ghost = createGhost(sourceEl);
+    dragState = { isFile, id, ghost, sourceEl, lastY: clientY, insertAfterEl: null };
+  }
+
+  function updateDrag(clientY) {
+    if (!dragState) return;
+    const dy = clientY - dragState.lastY;
+    dragState.lastY = clientY;
+    moveGhost(dragState.ghost, dy);
+
+    // 找插入位置
+    removeDropIndicator();
+    const listEl = getFileListEl();
+    const draggedFile = dragState.isFile ? files.find(x => x.id === dragState.id) : null;
+    const folderListEl = dragState.sourceEl.closest('.folder-children');
+    const items = dragState.isFile
+      ? (draggedFile?.folder
+        ? [...(folderListEl || listEl).querySelectorAll(`.file-item:not(.dragging)`)]
+        : [...listEl.querySelectorAll(`#file-list > .folder-group:not(.dragging), #file-list > .file-item:not(.dragging)`)])
+      : [...listEl.querySelectorAll(`#file-list > .folder-group:not(.dragging), #file-list > .file-item:not(.dragging)`)];
+
+    let insertAfterEl = null;
+    let insertBeforeEl = null;
+    for (const item of items) {
+      const rect = item.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (clientY > mid) {
+        insertAfterEl = item;
+      } else if (!insertBeforeEl) {
+        insertBeforeEl = item;
+        break;
+      }
+    }
+    dragState.insertAfterEl = insertAfterEl;
+
+    // 显示插入指示线
+    const indicator = document.createElement('div');
+    indicator.className = 'drop-indicator';
+    if (insertAfterEl) {
+      insertAfterEl.after(indicator);
+    } else if (insertBeforeEl) {
+      insertBeforeEl.before(indicator);
+    } else if (items.length === 0) {
+      (folderListEl || listEl).appendChild(indicator);
+    }
+  }
+
+  async function endDrag() {
+    if (!dragState) return;
+    const { isFile, id, ghost, sourceEl, insertAfterEl } = dragState;
+    dragState = null;
+    ghost.remove();
+    sourceEl.classList.remove('dragging');
+    removeDropIndicator();
+    if (isFile) {
+      const f = files.find(x => x.id === id);
+      await endFileDrag(id, f?.folder || '', insertAfterEl);
+    } else {
+      await endFolderDrag(id, insertAfterEl);
+    }
+  }
+
+  function cancelDrag() {
+    clearTimeout(pressTimer);
+    pressTimer = null;
+    if (!dragState) return;
+    dragState.ghost.remove();
+    dragState.sourceEl.classList.remove('dragging');
+    removeDropIndicator();
+    dragState = null;
+  }
+
+  getFileListEl().addEventListener('pointerdown', e => {
+    const handle = e.target.closest('[data-drag-file],[data-drag-folder]');
+    if (!handle) return;
+    // 鼠标仅左键生效
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    clearTextSelection();
+    startTouch = { clientX: e.clientX, clientY: e.clientY };
+    if (e.pointerType === 'mouse') {
+      // 鼠标：立即开始拖拽
+      beginDrag(handle, e.clientX, e.clientY);
+    } else {
+      // 触摸：长按后开始
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        clearTextSelection();
+        beginDrag(handle, startTouch.clientX, startTouch.clientY);
+      }, LONG_PRESS_MS);
+    }
+  }, { passive: true });
+
+  document.addEventListener('pointermove', e => {
+    if (pressTimer !== null) {
+      const dx = Math.abs(e.clientX - startTouch.clientX);
+      const dy = Math.abs(e.clientY - startTouch.clientY);
+      if (dx > 8 || dy > 8) { clearTimeout(pressTimer); pressTimer = null; }
+      return;
+    }
+    if (!dragState) return;
+    e.preventDefault();
+    updateDrag(e.clientY);
+  }, { passive: false });
+
+  document.addEventListener('pointerup', async e => {
+    clearTimeout(pressTimer);
+    pressTimer = null;
+    if (!dragState) return;
+    await endDrag();
+  });
+
+  document.addEventListener('pointercancel', cancelDrag);
+})();
+
+// ===== ASSEMBLE =====
+document.getElementById('btn-assemble').onclick = openAssemble;
+
+function buildAssembledText(customPrompt) {
+  const parts = [];
+  selectedFileIds.forEach(id => {
+    const f = files.find(x => x.id === id);
+    if (f) parts.push(`[${f.name}]\n${f.content}`);
+  });
+  if (customPrompt && customPrompt.trim()) parts.push(`---\n${customPrompt.trim()}`);
+  return parts.join('\n\n');
+}
+
+function estimateTokenCount(text) {
+  const cjkCount = (text.match(/[\u3400-\u9fff]/g) || []).length;
+  const nonCjkText = text.replace(/[\u3400-\u9fff]/g, ' ');
+  const nonCjkUnits = (nonCjkText.match(/[A-Za-z0-9_]+|[^\sA-Za-z0-9_]/g) || []).length;
+  return Math.ceil(cjkCount + nonCjkUnits * 0.75);
+}
+
+let assembleManualEdited = false;
+let assembleVars = {}; // { 变量名: 值 }
+
+function extractVars(text) {
+  const re = /\{\{([^}]+)\}\}/g;
+  const names = new Set();
+  let m;
+  while ((m = re.exec(text))) names.add(m[1].trim());
+  return [...names];
+}
+
+function applyVars(text) {
+  let result = text;
+  for (const [k, v] of Object.entries(assembleVars)) {
+    if (v) result = result.split(`{{${k}}}`).join(v);
+  }
+  return result;
+}
+
+function updateAssembleVars() {
+  const baseText = buildAssembledText(document.getElementById('assemble-prompt').value);
+  const names = extractVars(baseText);
+  const group = document.getElementById('assemble-vars-group');
+  const list = document.getElementById('assemble-vars-list');
+  if (!names.length) {
+    group.style.display = 'none';
+    assembleVars = {};
+    return;
+  }
+  group.style.display = '';
+  const nameSet = new Set(names);
+  assembleVars = Object.fromEntries(Object.entries(assembleVars).filter(([k]) => nameSet.has(k)));
+  list.innerHTML = names.map(n => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:13px;color:var(--text-2);min-width:90px;font-family:monospace">{{${esc(n)}}}</span>
+      <input class="form-input" data-var="${esc(n)}" value="${esc(assembleVars[n] || '')}" placeholder="输入替换值" style="flex:1;padding:6px 10px;font-size:13px">
+    </div>`).join('');
+}
+
+function updateAssemblePreview() {
+  if (assembleManualEdited) {
+    // 用户已手动编辑，仅刷新统计
+    const text = document.getElementById('assemble-preview').value;
+    document.getElementById('assemble-stats').textContent =
+      `上下文 ${Array.from(text).length.toLocaleString()} 字 · 约 ${estimateTokenCount(text).toLocaleString()} tokens（已手动编辑）`;
+    return;
+  }
+  updateAssembleVars();
+  let text = buildAssembledText(document.getElementById('assemble-prompt').value);
+  text = applyVars(text);
+  document.getElementById('assemble-preview').value = text;
+  document.getElementById('assemble-stats').textContent =
+    `上下文 ${Array.from(text).length.toLocaleString()} 字 · 约 ${estimateTokenCount(text).toLocaleString()} tokens`;
+}
+
+function renderAssembleFileList() {
+  const el = document.getElementById('assemble-files-list');
+  el.innerHTML = selectedFileIds.map((id, i) => {
+    const f = files.find(x => x.id === id);
+    if (!f) return '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="flex:1;font-size:14px">${esc(f.name)}</span>
+      <button data-move-up="${i}" style="padding:4px 8px;border-radius:6px;background:var(--bg);border:1px solid var(--border);font-size:13px;color:var(--text-2);${i===0?'opacity:0.3;pointer-events:none':''}">↑</button>
+      <button data-move-down="${i}" style="padding:4px 8px;border-radius:6px;background:var(--bg);border:1px solid var(--border);font-size:13px;color:var(--text-2);${i===selectedFileIds.length-1?'opacity:0.3;pointer-events:none':''}">↓</button>
+    </div>`;
+  }).join('');
+}
+
+function openAssemble() {
+  assembleManualEdited = false;
+  assembleVars = {};
+  document.getElementById('assemble-preview').value = '';
+  renderAssembleFileList();
+  updateAssemblePreview();
+  document.getElementById('overlay-assemble').classList.add('active');
+}
+
+document.getElementById('assemble-prompt').addEventListener('input', () => {
+  // 提示词变化时，如果用户没手动编辑预览，则重新生成（变量也会重新提取）
+  if (!assembleManualEdited) updateAssemblePreview();
+  else updateAssembleVars(); // 仍刷新变量列表，但不覆盖预览
+});
+
+// 变量输入
+document.getElementById('assemble-vars-list').addEventListener('input', e => {
+  const input = e.target.closest('[data-var]');
+  if (!input) return;
+  assembleVars[input.dataset.var] = input.value;
+  if (!assembleManualEdited) updateAssemblePreview();
+});
+
+// 用户手动编辑预览
+document.getElementById('assemble-preview').addEventListener('input', () => {
+  assembleManualEdited = true;
+  updateAssemblePreview();
+});
+
+document.getElementById('assemble-files-list').addEventListener('click', e => {
+  const upIdx = e.target.closest('[data-move-up]')?.dataset.moveUp;
+  const downIdx = e.target.closest('[data-move-down]')?.dataset.moveDown;
+  if (upIdx !== undefined) {
+    const i = Number(upIdx);
+    if (i > 0) { [selectedFileIds[i-1], selectedFileIds[i]] = [selectedFileIds[i], selectedFileIds[i-1]]; }
+  } else if (downIdx !== undefined) {
+    const i = Number(downIdx);
+    if (i < selectedFileIds.length - 1) { [selectedFileIds[i], selectedFileIds[i+1]] = [selectedFileIds[i+1], selectedFileIds[i]]; }
+  } else { return; }
+  assembleManualEdited = false; // 顺序变化后重新生成
+  renderAssembleFileList();
+  updateAssemblePreview();
+});
+
+document.getElementById('btn-close-assemble').onclick = () => document.getElementById('overlay-assemble').classList.remove('active');
+
+document.getElementById('btn-copy-assemble').onclick = async () => {
+  const text = document.getElementById('assemble-preview').value;
+  await copyText(text);
+  toast('已复制');
+};
+
+document.getElementById('btn-send-assemble').onclick = () => {
+  const text = document.getElementById('assemble-preview').value;
+  document.getElementById('overlay-assemble').classList.remove('active');
+  pendingAssembledText = text;
+  switchToChat();
+  setTimeout(() => {
+    document.getElementById('chat-input').value = text;
+    autoResizeInput();
+    document.getElementById('btn-send').disabled = false;
+  }, 100);
+};
+
+function switchToChat() {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('[data-tab="chat"]').classList.add('active');
+  document.getElementById('tab-chat').classList.add('active');
+}
+
+// ===== CHAT =====
+function renderCurrentModel() {
+  const label = document.getElementById('current-model-label');
+  const p = providers.find(x => x.id === settings.currentProviderId);
+  const m = p?.models?.find(x => x.id === settings.currentModelId);
+  label.textContent = m ? `${p.name} · ${m.name}` : '请选择模型';
+  document.getElementById('btn-send').disabled = !m || isStreaming;
+}
+
+document.getElementById('btn-model-select').onclick = openModelSelect;
+document.getElementById('btn-close-model').onclick = () => document.getElementById('overlay-model').classList.remove('active');
+
+function openModelSelect() {
+  const el = document.getElementById('model-list');
+  if (!providers.length) {
+    el.innerHTML = `<div class="empty"><p>请先在设置中添加提供商</p></div>`;
+  } else {
+    el.innerHTML = providers.map(p => `
+      <div style="margin-bottom:14px">
+        <div style="font-size:12px;color:var(--text-3);padding:0 4px 6px;text-transform:uppercase">${esc(p.name)}</div>
+        ${(p.models||[]).map(m => `
+          <div class="setting-item" data-sel-model="${p.id}|${m.id}" style="cursor:pointer;${settings.currentProviderId===p.id&&settings.currentModelId===m.id?'background:var(--primary-light);color:var(--primary)':''}">
+            <span class="setting-item-label">${esc(m.name)}</span>
+            <span class="setting-item-value" style="font-size:12px">${esc(m.id)}</span>
+          </div>`).join('')}
+      </div>`).join('');
+  }
+  document.getElementById('overlay-model').classList.add('active');
+}
+
+document.getElementById('model-list').addEventListener('click', async e => {
+  const val = e.target.closest('[data-sel-model]')?.dataset.selModel;
+  if (!val) return;
+  const [pid, mid] = val.split('|');
+  settings.currentProviderId = pid;
+  settings.currentModelId = mid;
+  await saveSettings();
+  renderCurrentModel();
+  document.getElementById('overlay-model').classList.remove('active');
+});
+
+document.getElementById('btn-new-chat').onclick = newChat;
+function newChat() {
+  currentConvId = null;
+  document.getElementById('chat-messages').innerHTML = `<div class="empty" id="chat-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><p>选择文件拼装提示词，或直接输入开始对话</p></div>`;
+  document.getElementById('chat-input').value = '';
+  autoResizeInput();
+  setChatAutoFollow(true);
+}
+
+document.getElementById('btn-history').onclick = openHistory;
+document.getElementById('btn-close-history').onclick = () => document.getElementById('overlay-history').classList.remove('active');
+
+function openHistory() {
+  const el = document.getElementById('history-list');
+  const sorted = conversations.filter(c => c.projectId === currentProjectId).sort((a,b) => b.updatedAt - a.updatedAt);
+  if (!sorted.length) {
+    el.innerHTML = `<div class="empty"><p>暂无历史对话</p></div>`;
+  } else {
+    el.innerHTML = sorted.map(c => `
+      <div class="conv-item" data-load-conv="${c.id}">
+        <div class="conv-info">
+          <div class="conv-title">${esc(c.title || '未命名对话')}</div>
+          <div class="conv-meta">${c.messages.length} 条消息 · ${fmtDate(c.updatedAt)}</div>
+        </div>
+        <button class="conv-del" data-del-conv="${c.id}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+      </div>`).join('');
+  }
+  document.getElementById('overlay-history').classList.add('active');
+}
+
+document.getElementById('history-list').addEventListener('click', async e => {
+  const loadId = e.target.closest('[data-load-conv]')?.dataset.loadConv;
+  const delId = e.target.closest('[data-del-conv]')?.dataset.delConv;
+  if (delId) {
+    e.stopPropagation();
+    const ok = await confirm('删除对话', '确定删除这条历史对话？');
+    if (ok) {
+      await dbDelete('conversations', delId);
+      conversations = conversations.filter(x => x.id !== delId);
+      if (currentConvId === delId) newChat();
+      openHistory();
+    }
+    return;
+  }
+  if (loadId) {
+    const conv = conversations.find(x => x.id === loadId);
+    if (conv) { loadConversation(conv); document.getElementById('overlay-history').classList.remove('active'); }
+  }
+});
+
+function loadConversation(conv) {
+  currentConvId = conv.id;
+  settings.currentProviderId = conv.providerId || settings.currentProviderId;
+  settings.currentModelId = conv.modelId || settings.currentModelId;
+  renderCurrentModel();
+  const el = document.getElementById('chat-messages');
+  el.innerHTML = '';
+  conv.messages.forEach(m => appendMessage(m.role, m.content, false));
+  setChatAutoFollow(true);
+  scrollChatToBottom();
+}
+
+let chatAutoFollow = true;
+let chatProgrammaticScroll = false;
+let chatTouchStartY = null;
+
+function getChatMessagesEl() {
+  return document.getElementById('chat-messages');
+}
+
+function isChatNearBottom(threshold = 80) {
+  const el = getChatMessagesEl();
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+}
+
+function updateChatBottomButton() {
+  const btn = document.getElementById('btn-chat-bottom');
+  if (!btn) return;
+  btn.classList.toggle('show', !chatAutoFollow);
+}
+
+function setChatAutoFollow(enabled) {
+  chatAutoFollow = enabled;
+  updateChatBottomButton();
+}
+
+function scrollChatToBottom() {
+  const el = getChatMessagesEl();
+  chatProgrammaticScroll = true;
+  el.scrollTop = el.scrollHeight;
+  requestAnimationFrame(() => {
+    el.scrollTop = el.scrollHeight;
+    chatProgrammaticScroll = false;
+    updateChatBottomButton();
+  });
+}
+
+getChatMessagesEl().addEventListener('scroll', () => {
+  if (chatProgrammaticScroll) return;
+  setChatAutoFollow(isChatNearBottom());
+}, { passive: true });
+
+getChatMessagesEl().addEventListener('touchstart', e => {
+  chatTouchStartY = e.touches[0]?.clientY ?? null;
+}, { passive: true });
+
+getChatMessagesEl().addEventListener('touchmove', e => {
+  if (chatTouchStartY == null) return;
+  const currentY = e.touches[0]?.clientY ?? chatTouchStartY;
+  if (currentY - chatTouchStartY > 8) setChatAutoFollow(false);
+}, { passive: true });
+
+getChatMessagesEl().addEventListener('touchend', () => { chatTouchStartY = null; }, { passive: true });
+getChatMessagesEl().addEventListener('touchcancel', () => { chatTouchStartY = null; }, { passive: true });
+
+getChatMessagesEl().addEventListener('wheel', e => {
+  if (e.deltaY < 0) setChatAutoFollow(false);
+}, { passive: true });
+
+document.getElementById('btn-chat-bottom').onclick = () => {
+  setChatAutoFollow(true);
+  scrollChatToBottom();
+};
+
+function appendMessage(role, content, scroll = true) {
+  const empty = document.getElementById('chat-empty');
+  if (empty) empty.remove();
+  const el = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  const id = 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+  const bubbleHtml = role === 'assistant' ? renderMarkdown(content) : esc(content);
+  div.innerHTML = `<div class="msg-bubble">${bubbleHtml}</div>
+    <div class="msg-meta">
+      <span class="msg-time">${fmtDate(ts())}</span>
+      <span class="msg-copy" data-copy="${id}">复制</span>
+    </div>`;
+  div.dataset.msgId = id;
+  div._rawContent = content;
+  el.appendChild(div);
+  if (scroll) {
+    setChatAutoFollow(true);
+    scrollChatToBottom();
+  }
+  return div.querySelector('.msg-bubble');
+}
+
+const chatInput = document.getElementById('chat-input');
+chatInput.addEventListener('input', autoResizeInput);
+chatInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+chatInput.addEventListener('input', () => {
+  document.getElementById('btn-send').disabled = !chatInput.value.trim() || isStreaming;
+});
+
+function autoResizeInput() {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+  document.getElementById('btn-send').disabled = !chatInput.value.trim() || isStreaming;
+}
+
+document.getElementById('btn-send').onclick = sendMessage;
+document.getElementById('btn-stop').onclick = () => {
+  if (abortController) abortController.abort();
+};
+
+// Copy message on click
+document.getElementById('chat-messages').addEventListener('click', async e => {
+  const btn = e.target.closest('[data-copy]');
+  if (!btn) return;
+  const msgId = btn.dataset.copy;
+  const msgDiv = document.querySelector(`[data-msg-id="${msgId}"]`);
+  if (!msgDiv) return;
+  const bubble = msgDiv.querySelector('.msg-bubble');
+  if (!bubble) return;
+  await copyText(msgDiv._rawContent ?? bubble.textContent);
+  btn.textContent = '已复制';
+  btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('copied'); }, 2000);
+});
+
+async function sendMessage() {
+  const text = chatInput.value.trim();
+  if (!text || isStreaming) return;
+  const p = providers.find(x => x.id === settings.currentProviderId);
+  const m = p?.models?.find(x => x.id === settings.currentModelId);
+  if (!p || !m) { toast('请先选择模型'); return; }
+
+  chatInput.value = '';
+  autoResizeInput();
+  document.getElementById('btn-send').disabled = true;
+
+  appendMessage('user', text);
+
+  if (!currentConvId) {
+    currentConvId = uuid();
+    const title = text.slice(0, 30) + (text.length > 30 ? '...' : '');
+    const conv = { id: currentConvId, title, projectId: currentProjectId, providerId: p.id, modelId: m.id, messages: [], createdAt: ts(), updatedAt: ts() };
+    conversations.unshift(conv);
+    await dbPut('conversations', conv);
+  }
+
+  const conv = conversations.find(x => x.id === currentConvId);
+  conv.messages.push({ role: 'user', content: text });
+  conv.updatedAt = ts();
+
+  const bubble = appendMessage('assistant', '');
+  bubble.innerHTML = '<span class="msg-thinking">思考中...</span>';
+
+  isStreaming = true;
+  abortController = new AbortController();
+  document.getElementById('btn-send').style.display = 'none';
+  document.getElementById('btn-stop').style.display = '';
+
+  // 检测是否支持流式读取
+  const supportsStream = typeof ReadableStream !== 'undefined' && typeof TextDecoder !== 'undefined';
+
+  let full = '';
+  let renderTimer = null;
+  let pendingFlush = false;
+
+  function flushDisplay() {
+    pendingFlush = false;
+    bubble.innerHTML = renderMarkdown(full);
+    if (bubble.parentElement) bubble.parentElement._rawContent = full;
+    if (chatAutoFollow) scrollChatToBottom();
+  }
+
+  try {
+    const msgs = conv.messages.map(x => ({role:x.role, content:x.content}));
+    const proj = projects.find(p => p.id === currentProjectId);
+    if (proj?.systemPrompt) msgs.unshift({ role: 'system', content: proj.systemPrompt });
+    const reqBody = { model: m.id, messages: msgs, stream: supportsStream };
+    if (m.maxTokens) reqBody.max_tokens = m.maxTokens;
+    if (m.temperature != null) reqBody.temperature = m.temperature;
+    if (m.topP != null) reqBody.top_p = m.topP;
+    const resp = await fetch(`${p.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${p.apiKey}` },
+      body: JSON.stringify(reqBody),
+      signal: abortController.signal
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`API 错误 ${resp.status}: ${err.slice(0,200)}`);
+    }
+
+    bubble.textContent = '';
+
+    if (supportsStream && resp.body) {
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const json = JSON.parse(data);
+            const delta = json.choices?.[0]?.delta?.content || '';
+            if (delta) {
+              full += delta;
+              if (!pendingFlush) {
+                pendingFlush = true;
+                renderTimer = setTimeout(flushDisplay, 60);
+              }
+            }
+          } catch {}
+        }
+      }
+      clearTimeout(renderTimer);
+      flushDisplay();
+    } else {
+      const json = await resp.json();
+      full = json.choices?.[0]?.message?.content || '';
+      bubble.innerHTML = renderMarkdown(full);
+      if (bubble.parentElement) bubble.parentElement._rawContent = full;
+      if (chatAutoFollow) scrollChatToBottom();
+    }
+
+    conv.messages.push({ role: 'assistant', content: full });
+    conv.updatedAt = ts();
+    await dbPut('conversations', conv);
+
+  } catch (err) {
+    clearTimeout(renderTimer);
+    if (err.name === 'AbortError') {
+      // 用户中止：保留已生成的内容并保存到对话
+      bubble.innerHTML = renderMarkdown(full);
+      if (bubble.parentElement) bubble.parentElement._rawContent = full;
+      if (full) {
+        conv.messages.push({ role: 'assistant', content: full });
+        conv.updatedAt = ts();
+        await dbPut('conversations', conv);
+      }
+    } else {
+      bubble.textContent = `错误：${err.message}`;
+      bubble.style.color = 'var(--danger)';
+    }
+  } finally {
+    isStreaming = false;
+    abortController = null;
+    clearTimeout(renderTimer);
+    document.getElementById('btn-send').style.display = '';
+    document.getElementById('btn-stop').style.display = 'none';
+    document.getElementById('btn-send').disabled = false;
+  }
+}
+
+// ===== PROJECTS =====
+function enterProject(id) {
+  currentProjectId = id;
+  currentConvId = null;
+  selectedFileIds = [];
+  const proj = projects.find(p => p.id === id);
+  document.getElementById('header-project-name').textContent = proj?.name || '项目';
+  document.getElementById('btn-sync').style.display = proj?.githubRepo ? '' : 'none';
+  newChat();
+  renderFiles();
+  renderCurrentModel();
+  renderProjectManageList();
+}
+
+function renderProjectManageList() {
+  const el = document.getElementById('project-manage-list');
+  if (!projects.length) {
+    el.innerHTML = `<div style="font-size:14px;color:var(--text-3);padding:8px 4px">暂无项目</div>`;
+    return;
+  }
+  el.innerHTML = projects.map(p => {
+    const active = p.id === currentProjectId;
+    const fc = files.filter(f => f.projectId === p.id).length;
+    return `<div class="setting-item" data-sel-project="${p.id}" style="cursor:pointer;${active?'background:var(--primary-light);color:var(--primary)':''}">
+      <span class="setting-item-label">${esc(p.name)}</span>
+      <span class="setting-item-value">${fc} 个文件</span>
+      ${active ? '<span style="color:var(--primary);font-size:12px;font-weight:500;margin-right:6px">当前</span>' : ''}
+      <button class="icon-btn" onclick="event.stopPropagation();openProjectEditor('${p.id}')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('btn-add-project').onclick = () => openProjectEditor(null);
+
+document.getElementById('project-manage-list').addEventListener('click', e => {
+  const selId = e.target.closest('[data-sel-project]')?.dataset.selProject;
+  if (selId && selId !== currentProjectId) enterProject(selId);
+});
+
+document.getElementById('btn-close-project').onclick = () => document.getElementById('overlay-project').classList.remove('active');
+document.getElementById('btn-cancel-project').onclick = () => document.getElementById('overlay-project').classList.remove('active');
+
+function openProjectEditor(id) {
+  editingProjectId = id;
+  const p = id ? projects.find(x => x.id === id) : null;
+  document.getElementById('project-sheet-title').textContent = p ? '编辑项目' : '新建项目';
+  document.getElementById('proj-name').value = p?.name || '';
+  document.getElementById('proj-pat').value = p?.githubPAT || '';
+  document.getElementById('proj-repo').value = p?.githubRepo || '';
+  document.getElementById('proj-dir').value = p?.githubDir || '';
+  document.getElementById('proj-branch').value = p?.githubBranch || '';
+  document.getElementById('proj-system-prompt').value = p?.systemPrompt || '';
+  document.getElementById('btn-delete-project').style.display = p ? 'block' : 'none';
+  document.getElementById('btn-export-project').style.display = p ? 'block' : 'none';
+  document.getElementById('overlay-project').classList.add('active');
+  setTimeout(() => document.getElementById('proj-name').focus(), 100);
+}
+
+document.getElementById('btn-save-project').onclick = async () => {
+  const name = document.getElementById('proj-name').value.trim();
+  if (!name) { toast('请输入项目名称'); return; }
+  const githubPAT = document.getElementById('proj-pat').value.trim();
+  const githubRepo = document.getElementById('proj-repo').value.trim();
+  const githubDir = document.getElementById('proj-dir').value.trim().replace(/^\/|\/$/g, '');
+  const githubBranch = document.getElementById('proj-branch').value.trim() || 'main';
+  const systemPrompt = document.getElementById('proj-system-prompt').value.trim();
+  if (editingProjectId) {
+    const p = projects.find(x => x.id === editingProjectId);
+    Object.assign(p, { name, githubPAT, githubRepo, githubDir, githubBranch, systemPrompt, updatedAt: ts() });
+    await dbPut('projects', p);
+    if (currentProjectId === editingProjectId) {
+      document.getElementById('header-project-name').textContent = name;
+      document.getElementById('btn-sync').style.display = githubRepo ? '' : 'none';
+    }
+  } else {
+    const p = { id: uuid(), name, githubPAT, githubRepo, githubDir, githubBranch, systemPrompt, createdAt: ts(), updatedAt: ts() };
+    projects.push(p);
+    await dbPut('projects', p);
+    if (!currentProjectId) enterProject(p.id);
+  }
+  document.getElementById('overlay-project').classList.remove('active');
+  renderProjectManageList();
+  toast(editingProjectId ? '已保存' : '项目已创建');
+};
+
+document.getElementById('btn-export-project').onclick = () => {
+  if (!editingProjectId) return;
+  const p = projects.find(x => x.id === editingProjectId);
+  if (!p) return;
+  const projectFiles = files.filter(f => f.projectId === editingProjectId);
+  const projectConvs = conversations.filter(c => c.projectId === editingProjectId);
+  const data = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    projects: [p],
+    files: projectFiles,
+    conversations: projectConvs,
+    settings
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `promptbox-${p.name}-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('已导出项目');
+};
+
+document.getElementById('btn-delete-project').onclick = async () => {
+  const fc = files.filter(f => f.projectId === editingProjectId).length;
+  const cc = conversations.filter(c => c.projectId === editingProjectId).length;
+  const ok = await confirm('删除项目', `确定删除此项目？项目内 ${fc} 个文件、${cc} 条对话将一并删除，不可撤销。`);
+  if (!ok) return;
+  for (const f of files.filter(x => x.projectId === editingProjectId)) await dbDelete('files', f.id);
+  for (const c of conversations.filter(x => x.projectId === editingProjectId)) await dbDelete('conversations', c.id);
+  await dbDelete('projects', editingProjectId);
+  files = files.filter(f => f.projectId !== editingProjectId);
+  conversations = conversations.filter(c => c.projectId !== editingProjectId);
+  projects = projects.filter(p => p.id !== editingProjectId);
+  if (currentProjectId === editingProjectId) {
+    currentProjectId = null;
+    currentConvId = null;
+    if (projects.length > 0) enterProject(projects[0].id);
+  }
+  document.getElementById('overlay-project').classList.remove('active');
+  if (currentProjectId) renderProjectManageList();
+  toast('已删除');
+};
+
+// ===== SETTINGS / PROVIDERS =====
+function renderProviders() {
+  const el = document.getElementById('provider-list');
+  if (!providers.length) {
+    el.innerHTML = `<div style="font-size:14px;color:var(--text-3);padding:8px 4px">还没有提供商</div>`;
+    return;
+  }
+  el.innerHTML = providers.map(p => `
+    <div class="setting-item" data-edit-provider="${p.id}" style="cursor:pointer">
+      <span class="setting-item-label">${esc(p.name)}</span>
+      <span class="setting-item-value">${(p.models||[]).length} 个模型</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color:var(--text-3)"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>`).join('');
+}
+
+document.getElementById('provider-list').addEventListener('click', e => {
+  const id = e.target.closest('[data-edit-provider]')?.dataset.editProvider;
+  if (id) openProviderEditor(id);
+});
+
+document.getElementById('btn-add-provider').onclick = () => openProviderEditor(null);
+
+function openProviderEditor(id) {
+  editingProviderId = id;
+  const p = id ? providers.find(x => x.id === id) : null;
+  document.getElementById('provider-sheet-title').textContent = p ? '编辑提供商' : '添加提供商';
+  document.getElementById('p-name').value = p?.name || '';
+  document.getElementById('p-url').value = p?.baseUrl || '';
+  document.getElementById('p-key').value = p?.apiKey || '';
+  tempModelTags = p ? JSON.parse(JSON.stringify(p.models || [])) : [];
+  editingModelIndex = -1;
+  document.getElementById('p-model-name').value = '';
+  document.getElementById('p-model-id').value = '';
+  document.getElementById('p-model-tokens').value = '';
+  document.getElementById('p-model-temp').value = '';
+  document.getElementById('p-model-topp').value = '';
+  document.getElementById('btn-delete-provider').style.display = p ? 'block' : 'none';
+  renderModelTags();
+  document.getElementById('overlay-provider').classList.add('active');
+}
+
+function renderModelTags() {
+  const el = document.getElementById('p-model-tags');
+  el.innerHTML = tempModelTags.map((m, i) => {
+    let info = esc(m.id);
+    const parts = [];
+    if (m.maxTokens) parts.push(`≤${m.maxTokens}t`);
+    if (m.temperature != null) parts.push(`T=${m.temperature}`);
+    if (m.topP != null) parts.push(`p=${m.topP}`);
+    if (parts.length) info += ` · ${parts.join(' ')}`;
+    return `<div class="model-tag" data-edit-tag="${i}" style="cursor:pointer">
+      <span>${esc(m.name)}</span>
+      <span style="font-size:11px;opacity:0.7">${info}</span>
+      <button class="model-tag-del" data-del-tag="${i}">×</button>
+    </div>`;
+  }).join('');
+}
+
+function populateModelForm(i) {
+  const m = tempModelTags[i];
+  if (!m) return;
+  editingModelIndex = i;
+  document.getElementById('p-model-name').value = m.name;
+  document.getElementById('p-model-id').value = m.id;
+  document.getElementById('p-model-tokens').value = m.maxTokens || '';
+  document.getElementById('p-model-temp').value = m.temperature != null ? m.temperature : '';
+  document.getElementById('p-model-topp').value = m.topP != null ? m.topP : '';
+  document.getElementById('btn-add-model-tag').textContent = '更新';
+}
+
+function clearModelForm() {
+  editingModelIndex = -1;
+  document.getElementById('p-model-name').value = '';
+  document.getElementById('p-model-id').value = '';
+  document.getElementById('p-model-tokens').value = '';
+  document.getElementById('p-model-temp').value = '';
+  document.getElementById('p-model-topp').value = '';
+  document.getElementById('btn-add-model-tag').textContent = '+ 添加';
+}
+
+document.getElementById('p-model-tags').addEventListener('click', e => {
+  const del = e.target.closest('[data-del-tag]')?.dataset.delTag;
+  if (del !== undefined) { tempModelTags.splice(Number(del), 1); if (editingModelIndex >= Number(del)) editingModelIndex--; renderModelTags(); clearModelForm(); return; }
+  const edit = e.target.closest('[data-edit-tag]')?.dataset.editTag;
+  if (edit !== undefined) populateModelForm(Number(edit));
+});
+
+document.getElementById('btn-add-model-tag').onclick = () => {
+  const name = document.getElementById('p-model-name').value.trim();
+  const id = document.getElementById('p-model-id').value.trim();
+  if (!name || !id) { toast('请填写模型名称和 ID'); return; }
+  const maxTokens = parseInt(document.getElementById('p-model-tokens').value) || 0;
+  const temperature = parseFloat(document.getElementById('p-model-temp').value);
+  const topP = parseFloat(document.getElementById('p-model-topp').value);
+  const model = { name, id };
+  if (maxTokens > 0) model.maxTokens = maxTokens;
+  if (!isNaN(temperature)) model.temperature = temperature;
+  if (!isNaN(topP)) model.topP = topP;
+  if (editingModelIndex >= 0) {
+    tempModelTags[editingModelIndex] = model;
+  } else {
+    tempModelTags.push(model);
+  }
+  clearModelForm();
+  renderModelTags();
+};
+
+document.getElementById('btn-close-provider').onclick = () => document.getElementById('overlay-provider').classList.remove('active');
+document.getElementById('btn-cancel-provider').onclick = () => document.getElementById('overlay-provider').classList.remove('active');
+
+document.getElementById('btn-save-provider').onclick = async () => {
+  const name = document.getElementById('p-name').value.trim();
+  const baseUrl = document.getElementById('p-url').value.trim();
+  const apiKey = document.getElementById('p-key').value.trim();
+  if (!name || !baseUrl || !apiKey) { toast('请填写完整信息'); return; }
+  if (editingProviderId) {
+    const p = providers.find(x => x.id === editingProviderId);
+    Object.assign(p, { name, baseUrl, apiKey, models: tempModelTags });
+  } else {
+    providers.push({ id: uuid(), name, baseUrl, apiKey, models: tempModelTags });
+  }
+  await saveSettings();
+  renderProviders();
+  renderCurrentModel();
+  document.getElementById('overlay-provider').classList.remove('active');
+  toast('已保存');
+};
+
+document.getElementById('btn-delete-provider').onclick = async () => {
+  const ok = await confirm('删除提供商', '确定删除此提供商及其所有模型配置？');
+  if (!ok) return;
+  providers = providers.filter(x => x.id !== editingProviderId);
+  if (settings.currentProviderId === editingProviderId) { settings.currentProviderId = null; settings.currentModelId = null; }
+  await saveSettings();
+  renderProviders();
+  renderCurrentModel();
+  document.getElementById('overlay-provider').classList.remove('active');
+  toast('已删除');
+};
+
+async function saveSettings() {
+  settings.providers = providers;
+  await dbPut('settings', { key: 'main', data: settings });
+}
+
+// ===== EXPORT / IMPORT =====
+document.getElementById('btn-reload').onclick = () => location.reload();
+
+document.getElementById('btn-export').onclick = async () => {
+  const data = { version: 2, exportedAt: new Date().toISOString(), projects, files, conversations, settings };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `promptbox-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('已导出');
+};
+
+document.getElementById('btn-import').onclick = () => document.getElementById('import-input').click();
+document.getElementById('import-input').onchange = async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const ok = await confirm('导入备份', '导入将覆盖当前所有数据，确定继续？', '导入');
+  if (!ok) { e.target.value = ''; return; }
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    // 结构校验
+    if (!data || typeof data !== 'object') throw new Error('备份格式无效');
+    if (data.version !== 2) throw new Error('不支持的备份版本：' + data.version);
+    const validateArray = (v, label) => {
+      if (v == null) return [];
+      if (!Array.isArray(v)) throw new Error(`${label} 应为数组`);
+      return v;
+    };
+    const projectsArr = validateArray(data.projects, 'projects');
+    const filesArr = validateArray(data.files, 'files');
+    const convsArr = validateArray(data.conversations, 'conversations');
+    // 必备字段检查
+    for (const p of projectsArr) {
+      if (!p.id || !p.name) throw new Error('project 缺少 id/name');
+    }
+    for (const f of filesArr) {
+      if (!f.id || typeof f.name !== 'string' || typeof f.content !== 'string') throw new Error('file 缺少 id/name/content');
+    }
+    for (const c of convsArr) {
+      if (!c.id || !Array.isArray(c.messages)) throw new Error('conversation 缺少 id/messages');
+    }
+    // 先清空旧数据再写入，确保导入是覆盖语义
+    await dbClear('projects');
+    await dbClear('files');
+    await dbClear('conversations');
+    await dbPutBatch('projects', projectsArr);
+    await dbPutBatch('files', filesArr);
+    await dbPutBatch('conversations', convsArr);
+    if (data.settings && typeof data.settings === 'object') await dbPut('settings', { key: 'main', data: data.settings });
+    await loadAll();
+    if (projects.length > 0) enterProject(projects[0].id);
+    renderProviders();
+    renderCurrentModel();
+    toast('导入成功');
+  } catch (err) {
+    toast('导入失败：' + err.message);
+  }
+  e.target.value = '';
+};
+
+// ===== GITHUB SYNC =====
+document.getElementById('btn-sync').onclick = () => {
+  document.getElementById('sync-log').textContent = '';
+  document.getElementById('overlay-sync').classList.add('active');
+};
+document.getElementById('btn-close-sync').onclick = () => document.getElementById('overlay-sync').classList.remove('active');
+
+function syncLog(msg) {
+  const el = document.getElementById('sync-log');
+  el.textContent += msg + '\n';
+}
+
+function ghHeaders(pat) {
+  return { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+}
+
+async function ghListTree(pat, repo, branch) {
+  const r = await fetch(`https://api.github.com/repos/${repo}/git/trees/${branch}?recursive=1`, { headers: ghHeaders(pat) });
+  if (!r.ok) throw new Error(`GitHub API ${r.status}: ${await r.text()}`);
+  const j = await r.json();
+  return j.tree.filter(x => x.type === 'blob');
+}
+
+async function ghGetFile(pat, repo, path, branch) {
+  const r = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path)}?ref=${branch}`, { headers: ghHeaders(pat) });
+  if (!r.ok) throw new Error(`获取文件失败 ${r.status}`);
+  return await r.json(); // { content (base64), sha, ... }
+}
+
+async function ghPutFile(pat, repo, path, content, sha, branch, message) {
+  const body = { message, content: btoa(unescape(encodeURIComponent(content))), branch };
+  if (sha) body.sha = sha;
+  const r = await fetch(`https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path)}`, {
+    method: 'PUT', headers: { ...ghHeaders(pat), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`写入文件失败 ${r.status}: ${await r.text()}`);
+  const j = await r.json();
+  return j.content.sha;
+}
+
+document.getElementById('btn-sync-pull').onclick = async () => {
+  const proj = projects.find(p => p.id === currentProjectId);
+  if (!proj?.githubRepo || !proj?.githubPAT) { syncLog('请先在项目设置中配置 GitHub 信息'); return; }
+  document.getElementById('btn-sync-pull').disabled = true;
+  document.getElementById('btn-sync-push').disabled = true;
+  syncLog('开始拉取...');
+  try {
+    const dir = proj.githubDir ? proj.githubDir + '/' : '';
+    const tree = await ghListTree(proj.githubPAT, proj.githubRepo, proj.githubBranch || 'main');
+    const targets = tree.filter(x => {
+      if (dir && !x.path.startsWith(dir)) return false;
+      return /\.(md|txt)$/i.test(x.path);
+    });
+    syncLog(`找到 ${targets.length} 个文件`);
+    let created = 0, updated = 0, skipped = 0;
+    for (const item of targets) {
+      const fileData = await ghGetFile(proj.githubPAT, proj.githubRepo, item.path, proj.githubBranch || 'main');
+      const remoteContent = decodeURIComponent(escape(atob(fileData.content.replace(/\n/g, ''))));
+      const remoteSha = fileData.sha;
+      const relPath = dir ? item.path.slice(dir.length) : item.path;
+      const parts = relPath.split('/');
+      const fileName = parts.pop().replace(/\.(md|txt)$/i, '');
+      const folder = parts.join('/');
+      const existing = files.find(f => f.projectId === currentProjectId && f.githubPath === item.path);
+      if (existing) {
+        if (existing.githubSha === remoteSha) { skipped++; continue; }
+        const ok = await confirm('文件有更新', `「${existing.name}」远端有更新，覆盖本地？`, '覆盖');
+        if (!ok) { skipped++; continue; }
+        existing.content = remoteContent; existing.githubSha = remoteSha; existing.updatedAt = ts();
+        await dbPut('files', existing);
+        updated++;
+      } else {
+        const f = { id: uuid(), name: fileName, content: remoteContent, folder, githubPath: item.path, githubSha: remoteSha, projectId: currentProjectId, createdAt: ts(), updatedAt: ts() };
+        files.unshift(f);
+        await dbPut('files', f);
+        created++;
+      }
+      syncLog(`  ✓ ${relPath}`);
+    }
+    syncLog(`完成：新增 ${created}，更新 ${updated}，跳过 ${skipped}`);
+    renderFiles();
+  } catch (e) { syncLog('错误：' + e.message); }
+  document.getElementById('btn-sync-pull').disabled = false;
+  document.getElementById('btn-sync-push').disabled = false;
+};
+
+document.getElementById('btn-sync-push').onclick = async () => {
+  const proj = projects.find(p => p.id === currentProjectId);
+  if (!proj?.githubRepo || !proj?.githubPAT) { syncLog('请先在项目设置中配置 GitHub 信息'); return; }
+  document.getElementById('btn-sync-pull').disabled = true;
+  document.getElementById('btn-sync-push').disabled = true;
+  syncLog('开始推送...');
+  const branch = proj.githubBranch || 'main';
+  const dir = proj.githubDir ? proj.githubDir + '/' : '';
+  const projectFiles = files.filter(f => f.projectId === currentProjectId);
+  let pushed = 0, failed = 0;
+  try {
+    for (const f of projectFiles) {
+      const ext = /\.(md|txt)$/i.test(f.name) ? '' : '.md';
+      const relPath = f.folder ? `${f.folder}/${f.name}${ext}` : `${f.name}${ext}`;
+      const ghPath = dir + relPath;
+      let sha = f.githubSha || null;
+      if (!sha && f.githubPath) {
+        try { const d = await ghGetFile(proj.githubPAT, proj.githubRepo, f.githubPath, branch); sha = d.sha; } catch {}
+      }
+      try {
+        const newSha = await ghPutFile(proj.githubPAT, proj.githubRepo, f.githubPath || ghPath, f.content, sha, branch, `update ${f.name}`);
+        f.githubPath = f.githubPath || ghPath;
+        f.githubSha = newSha;
+        f.updatedAt = ts();
+        await dbPut('files', f);
+        syncLog(`  ✓ ${relPath}`);
+        pushed++;
+      } catch (e) { syncLog(`  ✗ ${relPath}: ${e.message}`); failed++; }
+    }
+    syncLog(`完成：推送 ${pushed}，失败 ${failed}`);
+  } catch (e) { syncLog('错误：' + e.message); }
+  document.getElementById('btn-sync-pull').disabled = false;
+  document.getElementById('btn-sync-push').disabled = false;
+};
+
+// ===== THEME =====
+const THEME_KEY = 'promptbox-theme';
+const THEME_OPTIONS = ['auto', 'light', 'dark'];
+const THEME_LABELS = { auto: '跟随系统', light: '亮色', dark: '暗色' };
+function applyTheme(theme) {
+  if (theme === 'auto') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+  document.getElementById('theme-label').textContent = THEME_LABELS[theme];
+  localStorage.setItem(THEME_KEY, theme);
+}
+function cycleTheme() {
+  const cur = localStorage.getItem(THEME_KEY) || 'auto';
+  const idx = THEME_OPTIONS.indexOf(cur);
+  applyTheme(THEME_OPTIONS[(idx + 1) % THEME_OPTIONS.length]);
+}
+applyTheme(localStorage.getItem(THEME_KEY) || 'auto');
+document.getElementById('btn-theme').onclick = cycleTheme;
+
+// ===== PASSWORD TOGGLES =====
+function bindPasswordToggle(inputId, btnId) {
+  const input = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
+  if (!input || !btn) return;
+  btn.onclick = () => {
+    const isPwd = input.type === 'password';
+    input.type = isPwd ? 'text' : 'password';
+    btn.textContent = isPwd ? '隐藏' : '显示';
+  };
+}
+bindPasswordToggle('p-key', 'p-key-toggle');
+bindPasswordToggle('proj-pat', 'proj-pat-toggle');
+
+// ===== UTILS =====
+function esc(str) { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function renderMarkdown(text) {
+  if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+    return esc(text).replace(/\n/g, '<br>');
+  }
+  try {
+    if (marked.setOptions) marked.setOptions({ breaks: true, gfm: true });
+    const html = marked.parse ? marked.parse(String(text)) : marked(String(text));
+    return DOMPurify.sanitize(html);
+  } catch (e) {
+    return esc(text).replace(/\n/g, '<br>');
+  }
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); }
+}
+
+// ===== INIT =====
+(async () => {
+  await openDB();
+  await loadAll();
+  if (projects.length > 0) enterProject(projects[0].id);
+  else openProjectEditor(null);
+  renderCurrentModel();
+})();
+
+// ===== SERVICE WORKER =====
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
