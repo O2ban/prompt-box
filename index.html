@@ -30,7 +30,8 @@ html, body {
   background: var(--bg); font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif; font-size: 15px; color: var(--text);
 }
 button { font-family: inherit; cursor: pointer; border: none; background: none; }
-input, textarea { font-family: inherit; font-size: 15px; }
+input, textarea { font-family: inherit; font-size: 15px; color: var(--text); }
+:root { color-scheme: light dark; }
 
 /* Layout */
 #app { display: flex; flex-direction: column; height: 100%; height: 100dvh; min-height: 0; overflow: hidden; }
@@ -230,7 +231,7 @@ input, textarea { font-family: inherit; font-size: 15px; }
 .chat-input {
   flex: 1; border: 1px solid var(--border); border-radius: 10px;
   padding: 9px 12px; font-size: 14px; resize: none; outline: none;
-  max-height: 120px; min-height: 38px; line-height: 1.5; background: var(--bg);
+  max-height: 120px; min-height: 38px; line-height: 1.5; background: var(--bg); color: var(--text);
 }
 .send-btn {
   width: 38px; height: 38px; border-radius: 10px; background: var(--primary);
@@ -275,7 +276,7 @@ input, textarea { font-family: inherit; font-size: 15px; }
   padding: 10px 12px; font-size: 14px; outline: none; background: var(--bg);
   color: var(--text);
 }
-.form-input:focus { border-color: var(--primary); background: #fff; }
+.form-input:focus { border-color: var(--primary); background: var(--bg-card); }
 
 /* Model tag list */
 .model-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
