@@ -340,7 +340,7 @@ input, textarea { font-family: inherit; font-size: 15px; color: var(--text); }
 
 /* Assemble preview */
 .preview-box {
-  background: var(--bg); border-radius: 8px; padding: 12px;
+  width: 100%; background: var(--bg); border-radius: 8px; padding: 12px;
   font-size: 13px; line-height: 1.7; color: var(--text-2);
   white-space: pre-wrap; word-break: break-word; max-height: 200px;
   overflow-y: auto; border: 1px solid var(--border);
@@ -399,7 +399,7 @@ input, textarea { font-family: inherit; font-size: 15px; color: var(--text); }
 .file-item.in-folder { border-radius: 8px; margin-bottom: 4px; }
 .drag-handle {
   width: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  color: var(--text-3); touch-action: pan-y; cursor: grab; opacity: 0.5;
+  color: var(--text-3); touch-action: none; cursor: grab; opacity: 0.5;
 }
 .drag-handle:active { cursor: grabbing; }
 .drag-handle svg { width: 14px; height: 14px; }
@@ -1499,6 +1499,8 @@ document.getElementById('btn-copy-file').onclick = async () => {
     if (!handle) return;
     // 鼠标仅左键生效
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // 阻止浏览器默认滚动，确保拖拽优先
+    e.preventDefault();
     clearTextSelection();
     startTouch = { clientX: e.clientX, clientY: e.clientY };
     if (e.pointerType === 'mouse') {
@@ -1680,6 +1682,8 @@ document.getElementById('btn-send-assemble').onclick = () => {
   const text = document.getElementById('assemble-preview').value;
   document.getElementById('overlay-assemble').classList.remove('active');
   pendingAssembledText = text;
+  // 新建对话而非继续当前对话
+  newChat();
   switchToChat();
   setTimeout(() => {
     document.getElementById('chat-input').value = text;
