@@ -30,7 +30,8 @@ html, body {
   background: var(--bg); font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif; font-size: 15px; color: var(--text);
 }
 button { font-family: inherit; cursor: pointer; border: none; background: none; }
-input, textarea { font-family: inherit; font-size: 15px; }
+input, textarea { font-family: inherit; font-size: 15px; color: var(--text); }
+:root { color-scheme: light dark; }
 
 /* Layout */
 #app { display: flex; flex-direction: column; height: 100%; height: 100dvh; min-height: 0; overflow: hidden; }
@@ -196,13 +197,13 @@ input, textarea { font-family: inherit; font-size: 15px; }
 }
 .msg { margin-bottom: 14px; display: flex; flex-direction: column; }
 .msg.user { align-items: flex-end; }
-.msg.assistant { align-items: flex-start; }
+.msg.assistant { align-items: stretch; }
 .msg-bubble {
   max-width: 82%; padding: 10px 13px; border-radius: 14px;
   font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
 }
 .msg.user .msg-bubble { background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
-.msg.assistant .msg-bubble { background: var(--bg-card); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.msg.assistant .msg-bubble { max-width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; border-bottom-left-radius: 4px; }
 .msg-time { font-size: 11px; color: var(--text-3); }
 .msg-meta {
   display: flex; align-items: center; gap: 8px;
@@ -230,7 +231,7 @@ input, textarea { font-family: inherit; font-size: 15px; }
 .chat-input {
   flex: 1; border: 1px solid var(--border); border-radius: 10px;
   padding: 9px 12px; font-size: 14px; resize: none; outline: none;
-  max-height: 120px; min-height: 38px; line-height: 1.5; background: var(--bg);
+  max-height: 120px; min-height: 38px; line-height: 1.5; background: var(--bg); color: var(--text);
 }
 .send-btn {
   width: 38px; height: 38px; border-radius: 10px; background: var(--primary);
@@ -275,7 +276,7 @@ input, textarea { font-family: inherit; font-size: 15px; }
   padding: 10px 12px; font-size: 14px; outline: none; background: var(--bg);
   color: var(--text);
 }
-.form-input:focus { border-color: var(--primary); background: #fff; }
+.form-input:focus { border-color: var(--primary); background: var(--bg-card); }
 
 /* Model tag list */
 .model-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -354,6 +355,33 @@ input, textarea { font-family: inherit; font-size: 15px; }
 .drag-handle:active { cursor: grabbing; }
 .drag-handle svg { width: 14px; height: 14px; }
 .file-item.dragging, .folder-group.dragging { opacity: 0.3; }
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #5ba3e6;
+    --primary-light: #1e2d40;
+    --primary-dark: #4a8fcf;
+    --bg: #121212;
+    --bg-card: #1e1e1e;
+    --text: #e0e0e0;
+    --text-2: #aaa;
+    --text-3: #777;
+    --border: #333;
+  }
+  .form-input:focus { background: #2a2a2a; }
+  .msg.assistant .msg-bubble { background: #1e1e1e; border-color: #333; }
+  .msg.user .msg-bubble { background: #5ba3e6; }
+  .editor-textarea { background: #1e1e1e; }
+  .chat-input { background: #2a2a2a; border-color: #444; color: #fff; }
+  .form-input { background: #2a2a2a; border-color: #444; color: #fff; }
+  .editor-title-input { color: #e0e0e0; }
+  .dialog { background: #1e1e1e; }
+  .sheet { background: #1e1e1e; }
+  .preview-box { background: #2a2a2a; border-color: #444; }
+  .setting-item:active { background: var(--primary-light); }
+  .model-select-btn { background: #2a2a2a; border-color: #444; }
+}
 .drag-ghost {
   position: fixed; pointer-events: none; z-index: 500; opacity: 0.9;
   box-shadow: 0 6px 20px rgba(0,0,0,0.15); border-radius: var(--radius);

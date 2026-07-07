@@ -1,5 +1,5 @@
 // PromptBox Service Worker
-const CACHE_NAME = 'promptbox-v1';
+const CACHE_NAME = 'promptbox-v2';
 const CORE_ASSETS = ['./index.html', './manifest.json'];
 const CDN_ASSETS = [
   'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
@@ -41,19 +41,16 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // 同源资源：缓存优先，网络更新
+  // 同源 HTML：网络优先（确保刷新能看到最新版本）
   if (url.origin === self.location.origin) {
     e.respondWith(
-      caches.match(e.request).then(cached => {
-        const network = fetch(e.request).then(resp => {
-          if (resp && resp.status === 200) {
-            const copy = resp.clone();
-            caches.open(CACHE_NAME).then(c => c.put(e.request, copy));
-          }
-          return resp;
-        }).catch(() => cached);
-        return cached || network;
-      })
+      fetch(e.request).then(resp => {
+        if (resp && resp.status === 200) {
+          const copy = resp.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, copy));
+        }
+        return resp;
+      }).catch(() => caches.match(e.request))
     );
   }
 });
